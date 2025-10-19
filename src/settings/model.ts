@@ -14,6 +14,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SYSTEM_PROMPT,
   EmbeddingModelProviders,
+  SEND_SHORTCUT,
 } from "@/constants";
 import { logInfo } from "@/logger";
 
@@ -103,6 +104,7 @@ export interface CopilotSettings {
   embeddingRequestsPerMin: number;
   embeddingBatchSize: number;
   defaultOpenArea: DEFAULT_OPEN_AREA;
+  defaultSendShortcut: SEND_SHORTCUT;
   disableIndexOnMobile: boolean;
   showSuggestedPrompts: boolean;
   showRelevantNotes: boolean;
