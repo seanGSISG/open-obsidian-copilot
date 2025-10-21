@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -14,26 +13,155 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertTriangle, RotateCcw, Settings, Settings2 } from "lucide-react";
 import { SettingSwitch } from "@/components/ui/setting-switch";
+import { ParameterControl } from "@/components/ui/parameter-controls";
+import { FormField } from "@/components/ui/form-field";
+import {
+  getCurrentModelParams,
+  getParamRange,
+  getParamDisplayValue,
+  isParamApplicable,
+} from "@/utils/modelParamsHelper";
+import { subscribeToModelKeyChange } from "@/aiParams";
+import { subscribeToSettingsChange } from "@/settings/model";
+
+/**
+ * 脏值追踪状态，用于标记用户是否手动修改过参数
+ * true 表示用户修改过，不应被全局设置覆盖
+ */
+interface DirtyState {
+  temperature: boolean;
+  topP: boolean;
+  frequencyPenalty: boolean;
+  systemPrompt: boolean;
+  allowOverride: boolean;
+}
 
 interface ChatSettingsPopoverProps {
   onManagePrompts?: () => void;
 }
 
 export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProps) {
-  const [temperature, setTemperature] = useState([0.7]);
-  const [topP, setTopP] = useState([0.9]);
-  const [frequencyPenalty, setFrequencyPenalty] = useState([0]);
+  // 获取当前模型参数
+  const [modelParams, setModelParams] = useState(() => getCurrentModelParams());
+
+  // 本地状态（用于 UI 交互）
+  const [temperature, setTemperature] = useState(getParamDisplayValue(modelParams, "temperature"));
+  const [topP, setTopP] = useState(getParamDisplayValue(modelParams, "topP"));
+  const [frequencyPenalty, setFrequencyPenalty] = useState(
+    getParamDisplayValue(modelParams, "frequencyPenalty")
+  );
   const [systemPrompt, setSystemPrompt] = useState("default");
   const [allowOverride, setAllowOverride] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
+  console.log(topP);
+
+  // 脏值追踪：标记哪些参数被用户手动修改过
+  const [dirtyFlags, setDirtyFlags] = useState<DirtyState>({
+    temperature: false,
+    topP: false,
+    frequencyPenalty: false,
+    systemPrompt: false,
+    allowOverride: false,
+  });
+
+  // 监听模型切换
+  useEffect(() => {
+    const unsubscribe = subscribeToModelKeyChange(() => {
+      const newParams = getCurrentModelParams();
+      setModelParams(newParams);
+
+      // 更新 UI 状态
+      setTemperature(getParamDisplayValue(newParams, "temperature"));
+      setTopP(getParamDisplayValue(newParams, "topP"));
+      setFrequencyPenalty(getParamDisplayValue(newParams, "frequencyPenalty"));
+
+      // 模型切换时清除所有脏标记（切换模型 = 全新开始）
+      setDirtyFlags({
+        temperature: false,
+        topP: false,
+        frequencyPenalty: false,
+        systemPrompt: false,
+        allowOverride: false,
+      });
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // 监听全局设置变化（只更新未被用户修改的参数）
+  useEffect(() => {
+    const unsubscribe = subscribeToSettingsChange(() => {
+      const newParams = getCurrentModelParams();
+
+      // 只更新未被用户手动修改的参数
+      if (!dirtyFlags.temperature) {
+        setTemperature(getParamDisplayValue(newParams, "temperature"));
+      }
+      if (!dirtyFlags.topP) {
+        setTopP(getParamDisplayValue(newParams, "topP"));
+      }
+      if (!dirtyFlags.frequencyPenalty) {
+        setFrequencyPenalty(getParamDisplayValue(newParams, "frequencyPenalty"));
+      }
+
+      // 更新 modelParams 引用（用于参数范围等）
+      setModelParams(newParams);
+    });
+
+    return unsubscribe;
+  }, [dirtyFlags]);
+
   const handleReset = () => {
-    setTemperature([0.7]);
-    setTopP([0.9]);
-    setFrequencyPenalty([0]);
+    // 重置到当前模型的默认值
+    const freshParams = getCurrentModelParams();
+    setTemperature(getParamDisplayValue(freshParams, "temperature"));
+    setTopP(getParamDisplayValue(freshParams, "topP"));
+    setFrequencyPenalty(getParamDisplayValue(freshParams, "frequencyPenalty"));
     setSystemPrompt("default");
     setAllowOverride(false);
     setShowConfirmation(false);
+
+    // 重置时清除所有脏标记，恢复"跟随全局默认"状态
+    setDirtyFlags({
+      temperature: false,
+      topP: false,
+      frequencyPenalty: false,
+      systemPrompt: false,
+      allowOverride: false,
+    });
+  };
+
+  // 包装的参数更新函数，在更新值的同时标记脏值
+  const handleTemperatureChange = (value: number) => {
+    setTemperature(value);
+    setDirtyFlags((prev) => ({ ...prev, temperature: true }));
+  };
+
+  const handleTopPChange = (value: number) => {
+    setTopP(value);
+    setDirtyFlags((prev) => ({ ...prev, topP: true }));
+  };
+
+  const handleFrequencyPenaltyChange = (value: number) => {
+    setFrequencyPenalty(value);
+    setDirtyFlags((prev) => ({ ...prev, frequencyPenalty: true }));
+  };
+
+  const handleSystemPromptChange = (value: string) => {
+    setSystemPrompt(value);
+    setDirtyFlags((prev) => ({ ...prev, systemPrompt: true }));
+  };
+
+  // 禁用可选参数时的处理函数（恢复默认值并清除脏标记）
+  const handleTopPDisable = () => {
+    setTopP(getParamDisplayValue(modelParams, "topP"));
+    setDirtyFlags((prev) => ({ ...prev, topP: false }));
+  };
+
+  const handleFrequencyPenaltyDisable = () => {
+    setFrequencyPenalty(getParamDisplayValue(modelParams, "frequencyPenalty"));
+    setDirtyFlags((prev) => ({ ...prev, frequencyPenalty: false }));
   };
 
   const handleOverrideToggle = (checked: boolean) => {
@@ -43,6 +171,7 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
       setAllowOverride(false);
       setShowConfirmation(false);
     }
+    setDirtyFlags((prev) => ({ ...prev, allowOverride: true }));
   };
 
   const confirmOverride = () => {
@@ -53,6 +182,13 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
   const cancelOverride = () => {
     setShowConfirmation(false);
   };
+
+  // 获取参数范围
+  const tempRange = getParamRange("temperature");
+  const topPRange = getParamRange("topP");
+  const freqPenaltyRange = getParamRange("frequencyPenalty");
+
+  const { model, isReasoningModel } = modelParams;
 
   return (
     <Popover>
@@ -86,7 +222,7 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
                     System Prompt
                   </Label>
                   <div className="tw-flex tw-items-center tw-gap-2 sm:tw-flex-1">
-                    <Select value={systemPrompt} onValueChange={setSystemPrompt}>
+                    <Select value={systemPrompt} onValueChange={handleSystemPromptChange}>
                       <SelectTrigger id="system-prompt" className="tw-flex-1">
                         <SelectValue />
                       </SelectTrigger>
@@ -110,52 +246,70 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
               </div>
 
               {/* Temperature */}
-              <div className="tw-space-y-2">
-                <div className="tw-flex tw-items-center tw-justify-between">
-                  <Label htmlFor="temperature">Temperature</Label>
-                  <span className="tw-text-sm tw-text-muted">{temperature[0].toFixed(2)}</span>
+              {isParamApplicable(model, "temperature") && !isReasoningModel && (
+                <FormField>
+                  <ParameterControl
+                    type="slider"
+                    optional={false}
+                    label="Temperature"
+                    value={temperature}
+                    onChange={handleTemperatureChange}
+                    min={tempRange.min}
+                    max={tempRange.max}
+                    step={tempRange.step}
+                    defaultValue={tempRange.default}
+                    helpText="Higher values = more creative, lower values = more focused"
+                  />
+                </FormField>
+              )}
+
+              {/* Reasoning model temperature notice */}
+              {isReasoningModel && (
+                <div className="tw-space-y-1.5">
+                  <Label>Temperature</Label>
+                  <div className="tw-rounded-md tw-bg-modifier-hover tw-p-2.5 tw-text-sm tw-text-muted">
+                    Fixed at {temperature.toFixed(1)} for reasoning models
+                  </div>
                 </div>
-                <Slider
-                  id="temperature"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={temperature}
-                  onValueChange={setTemperature}
-                />
-              </div>
+              )}
 
               {/* Top-P */}
-              <div className="tw-space-y-2">
-                <div className="tw-flex tw-items-center tw-justify-between">
-                  <Label htmlFor="top-p">Top-P</Label>
-                  <span className="tw-text-sm tw-text-muted">{topP[0].toFixed(2)}</span>
-                </div>
-                <Slider
-                  id="top-p"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={topP}
-                  onValueChange={setTopP}
-                />
-              </div>
+              {isParamApplicable(model, "topP") && (
+                <FormField>
+                  <ParameterControl
+                    type="slider"
+                    optional={true}
+                    label="Top-P"
+                    value={topP}
+                    onChange={handleTopPChange}
+                    disableFn={handleTopPDisable}
+                    min={topPRange.min}
+                    max={topPRange.max}
+                    step={topPRange.step}
+                    defaultValue={topPRange.default}
+                    helpText="Nucleus sampling. Smaller = less variety, larger = more diverse"
+                  />
+                </FormField>
+              )}
 
               {/* Frequency Penalty */}
-              <div className="tw-space-y-2">
-                <div className="tw-flex tw-items-center tw-justify-between">
-                  <Label htmlFor="frequency-penalty">Frequency Penalty</Label>
-                  <span className="tw-text-sm tw-text-muted">{frequencyPenalty[0].toFixed(2)}</span>
-                </div>
-                <Slider
-                  id="frequency-penalty"
-                  min={-2}
-                  max={2}
-                  step={0.01}
-                  value={frequencyPenalty}
-                  onValueChange={setFrequencyPenalty}
-                />
-              </div>
+              {isParamApplicable(model, "frequencyPenalty") && (
+                <FormField>
+                  <ParameterControl
+                    type="slider"
+                    optional={true}
+                    label="Frequency Penalty"
+                    value={frequencyPenalty}
+                    onChange={handleFrequencyPenaltyChange}
+                    disableFn={handleFrequencyPenaltyDisable}
+                    min={freqPenaltyRange.min}
+                    max={freqPenaltyRange.max}
+                    step={freqPenaltyRange.step}
+                    defaultValue={freqPenaltyRange.default}
+                    helpText="Penalizes repeated words. Higher = less repetition"
+                  />
+                </FormField>
+              )}
 
               <Separator />
 
