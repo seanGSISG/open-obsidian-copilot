@@ -15,6 +15,8 @@ import {
   ProviderMetadata,
   ProviderSettingsKeyMap,
   SettingKeyProviders,
+  ReasoningEffort,
+  Verbosity,
 } from "@/constants";
 import { getSettings } from "@/settings/model";
 import { debounce, getProviderInfo, getProviderLabel } from "@/utils";
@@ -333,11 +335,11 @@ export const ModelEditModalContent: React.FC<ModelEditModalContentProps> = ({
                       }
                       options={[
                         ...(localModel.name.startsWith("gpt-5")
-                          ? [{ value: "minimal", label: "Minimal" }]
+                          ? [{ value: ReasoningEffort.MINIMAL, label: "Minimal" }]
                           : []),
-                        { value: "low", label: "Low" },
-                        { value: "medium", label: "Medium" },
-                        { value: "high", label: "High" },
+                        { value: ReasoningEffort.LOW, label: "Low" },
+                        { value: ReasoningEffort.MEDIUM, label: "Medium" },
+                        { value: ReasoningEffort.HIGH, label: "High" },
                       ]}
                       helpText={
                         <>
@@ -368,9 +370,9 @@ export const ModelEditModalContent: React.FC<ModelEditModalContentProps> = ({
                         disableFn={() => handleLocalReset("verbosity")}
                         defaultValue={settings.verbosity ?? DEFAULT_MODEL_SETTING.VERBOSITY}
                         options={[
-                          { value: "low", label: "Low" },
-                          { value: "medium", label: "Medium" },
-                          { value: "high", label: "High" },
+                          { value: Verbosity.LOW, label: "Low" },
+                          { value: Verbosity.MEDIUM, label: "Medium" },
+                          { value: Verbosity.HIGH, label: "High" },
                         ]}
                         helpText={
                           <>

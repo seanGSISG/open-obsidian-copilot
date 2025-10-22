@@ -127,11 +127,30 @@ export const PLUS_UTM_MEDIUMS = {
 };
 export type PlusUtmMedium = (typeof PLUS_UTM_MEDIUMS)[keyof typeof PLUS_UTM_MEDIUMS];
 
+/**
+ * OpenAI reasoning models 的推理强度级别
+ */
+export enum ReasoningEffort {
+  MINIMAL = "minimal",
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
+}
+
+/**
+ * GPT-5 模型的输出详细程度
+ */
+export enum Verbosity {
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
+}
+
 export const DEFAULT_MODEL_SETTING = {
   MAX_TOKENS: 6000,
   TEMPERATURE: 0.1,
-  REASONING_EFFORT: "low",
-  VERBOSITY: "medium",
+  REASONING_EFFORT: ReasoningEffort.LOW,
+  VERBOSITY: Verbosity.MEDIUM,
 } as const;
 
 export enum ChatModels {

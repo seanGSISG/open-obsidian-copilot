@@ -1,5 +1,5 @@
 import { CustomModel } from "@/aiParams";
-import { ChatModelProviders, DEFAULT_MODEL_SETTING } from "@/constants";
+import { ChatModelProviders, DEFAULT_MODEL_SETTING, ReasoningEffort, Verbosity } from "@/constants";
 import { CopilotSettings, getSettings } from "@/settings/model";
 import { getModelInfo } from "@/utils";
 import { getModelKey } from "@/aiParams";
@@ -13,8 +13,8 @@ export interface ModelParams {
   topP?: number;
   frequencyPenalty?: number;
   maxTokens?: number;
-  reasoningEffort?: "minimal" | "low" | "medium" | "high";
-  verbosity?: "low" | "medium" | "high";
+  reasoningEffort?: ReasoningEffort;
+  verbosity?: Verbosity;
   // 未来可以添加新参数：
   // presencePenalty?: number;
   // repetitionPenalty?: number;
@@ -41,8 +41,8 @@ export const DEFAULT_PARAM_RANGES: ParamRanges = {
     step: 0.01,
     default: DEFAULT_MODEL_SETTING.TEMPERATURE,
   },
-  topP: { min: 0, max: 1, step: 0.01, default: 0.9 },
-  frequencyPenalty: { min: -2, max: 2, step: 0.01, default: 0 },
+  topP: { min: 0, max: 1, step: 0.05, default: 0.9 },
+  frequencyPenalty: { min: 0, max: 2, step: 0.05, default: 0 },
   maxTokens: {
     min: 100,
     max: 128000,
@@ -144,7 +144,7 @@ export function getCurrentModelParams(): ModelParams & {
 
 /**
  * 从 CustomModel 和全局设置中提取参数配置
- * 三层优先级：model-specific → global settings → DEFAULT_MODEL_SETTING
+ * 两层优先级：model-specific → global settings
  */
 export function getModelParamsWithDefaults(
   model: CustomModel,
@@ -161,37 +161,36 @@ export function getModelParamsWithDefaults(
     // O-series 和 GPT-5 要求 temperature = 1
     temperature = 1;
   } else {
-    // 普通模型使用配置的 temperature，按优先级回退
-    temperature = model.temperature ?? settings.temperature ?? DEFAULT_MODEL_SETTING.TEMPERATURE;
+    // 普通模型使用配置的 temperature：model-specific → global settings
+    temperature = model.temperature ?? settings.temperature;
   }
 
   return {
     temperature,
-    // topP 没有系统默认值，只在 model 或 settings 中定义时使用
-    topP: model.topP ?? undefined,
-    // frequencyPenalty 没有系统默认值
-    frequencyPenalty: model.frequencyPenalty ?? undefined,
-    // maxTokens 使用三层优先级
-    maxTokens: model.maxTokens ?? settings.maxTokens ?? DEFAULT_MODEL_SETTING.MAX_TOKENS,
-    // reasoning models 专用参数
-    reasoningEffort:
-      model.reasoningEffort ?? settings.reasoningEffort ?? DEFAULT_MODEL_SETTING.REASONING_EFFORT,
-    verbosity: model.verbosity ?? settings.verbosity ?? DEFAULT_MODEL_SETTING.VERBOSITY,
+    // topP 只在 model 中定义（settings 中没有该字段）
+    topP: model.topP,
+    // frequencyPenalty 只在 model 中定义（settings 中没有该字段）
+    frequencyPenalty: model.frequencyPenalty,
+    // maxTokens：model-specific → global settings
+    maxTokens: model.maxTokens ?? settings.maxTokens,
+    // reasoning models 专用参数（只在 model 中定义）
+    reasoningEffort: model.reasoningEffort,
+    verbosity: model.verbosity,
   };
 }
 
 /**
  * 获取默认参数（当没有选中模型时使用）
- * 使用 settings → DEFAULT_MODEL_SETTING 的两层回退
+ * 直接使用全局 settings 的值
  */
 export function getDefaultParams(settings: CopilotSettings): ModelParams {
   return {
-    temperature: settings.temperature ?? DEFAULT_MODEL_SETTING.TEMPERATURE,
-    topP: undefined,
-    frequencyPenalty: undefined,
-    maxTokens: settings.maxTokens ?? DEFAULT_MODEL_SETTING.MAX_TOKENS,
-    reasoningEffort: settings.reasoningEffort ?? DEFAULT_MODEL_SETTING.REASONING_EFFORT,
-    verbosity: settings.verbosity ?? DEFAULT_MODEL_SETTING.VERBOSITY,
+    temperature: settings.temperature,
+    topP: undefined, // settings 中没有 topP
+    frequencyPenalty: undefined, // settings 中没有 frequencyPenalty
+    maxTokens: settings.maxTokens,
+    reasoningEffort: undefined, // settings 中没有 reasoningEffort
+    verbosity: undefined, // settings 中没有 verbosity
   };
 }
 
@@ -223,27 +222,65 @@ export function isParamSupported(
 }
 
 /**
- * 获取参数的显示值（用于 UI 显示）
- * 如果参数未定义，返回默认值
- * 对于没有系统默认值的参数（如 topP），返回 UI 友好的默认值
+ * Reasoning effort 选项配置
+ * todo 支持部分模型支持 minimal
  */
-// todo 返回值待确定
+export const REASONING_EFFORT_OPTIONS = [
+  { value: ReasoningEffort.MINIMAL, label: "Minimal" },
+  { value: ReasoningEffort.LOW, label: "Low" },
+  { value: ReasoningEffort.MEDIUM, label: "Medium" },
+  { value: ReasoningEffort.HIGH, label: "High" },
+];
+
+/**
+ * Verbosity 选项配置
+ */
+export const VERBOSITY_OPTIONS = [
+  { value: Verbosity.LOW, label: "Low" },
+  { value: Verbosity.MEDIUM, label: "Medium" },
+  { value: Verbosity.HIGH, label: "High" },
+];
+
+/**
+ * 获取 reasoningEffort 的默认值
+ * todo 默认值应该也和 getParamRange 放到一起
+ */
+export function getDefaultReasoningEffort(): ReasoningEffort {
+  return DEFAULT_MODEL_SETTING.REASONING_EFFORT;
+}
+
+/**
+ * 获取 verbosity 的默认值
+ */
+export function getDefaultVerbosity(): Verbosity {
+  return DEFAULT_MODEL_SETTING.VERBOSITY;
+}
+
+/**
+ * 获取参数的显示值（用于 UI 显示）- 数字类型参数的重载
+ */
+export function getParamDisplayValue(
+  params: ModelParams,
+  paramName: "temperature" | "topP" | "frequencyPenalty" | "maxTokens"
+): number | undefined;
+
+/**
+ * 获取参数的显示值（用于 UI 显示）- 字符串类型参数的重载
+ */
+export function getParamDisplayValue(
+  params: ModelParams,
+  paramName: "reasoningEffort" | "verbosity"
+): string | undefined;
+
+/**
+ * 获取参数的显示值（用于 UI 显示）- 实现
+ * 如果参数未定义，返回 undefined（表示参数未启用）
+ */
 export function getParamDisplayValue<K extends keyof ModelParams>(
   params: ModelParams,
   paramName: K
-): any {
-  const value = params[paramName];
-  if (value !== undefined && typeof value === "number") {
-    return value;
-  }
-
-  // 对于有系统默认值的参数，使用 DEFAULT_PARAM_RANGES
-  if (paramName in DEFAULT_PARAM_RANGES) {
-    return DEFAULT_PARAM_RANGES[paramName as keyof ParamRanges].default;
-  }
-
-  // 对于没有系统默认值的参数，返回 undefined
-  return undefined;
+): ModelParams[K] {
+  return params[paramName];
 }
 
 /**

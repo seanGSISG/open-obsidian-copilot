@@ -2,7 +2,7 @@ import { ChainType } from "@/chainFactory";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 
-import { ModelCapability } from "@/constants";
+import { ModelCapability, ReasoningEffort, Verbosity } from "@/constants";
 import { settingsAtom, settingsStore } from "@/settings/model";
 import { SelectedTextContext } from "@/types/message";
 import { atom, useAtom } from "jotai";
@@ -147,8 +147,8 @@ export interface CustomModel {
   azureOpenAIApiEmbeddingDeploymentName?: string;
 
   // OpenAI GPT-5 and O-series specific fields
-  reasoningEffort?: "minimal" | "low" | "medium" | "high";
-  verbosity?: "low" | "medium" | "high";
+  reasoningEffort?: ReasoningEffort;
+  verbosity?: Verbosity;
 }
 
 export function setModelKey(modelKey: string) {
