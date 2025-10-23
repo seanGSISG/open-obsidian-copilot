@@ -1,4 +1,4 @@
-import { CustomModel, ProjectConfig } from "@/aiParams";
+import { CustomModel, getDisableBuiltinSystemPrompt, ProjectConfig } from "@/aiParams";
 import { atom, createStore, useAtomValue } from "jotai";
 import { v4 as uuidv4 } from "uuid";
 import { UserMemoryManager } from "@/memory/UserMemoryManager";
@@ -436,6 +436,16 @@ export function sanitizeSettings(settings: CopilotSettings): CopilotSettings {
 
 export function getSystemPrompt(): string {
   const userPrompt = getSettings().userSystemPrompt;
+
+  // Check if builtin prompt is disabled for current session
+  const disableBuiltin = getDisableBuiltinSystemPrompt();
+
+  if (disableBuiltin) {
+    // Only return user custom prompt, if empty return empty string
+    return userPrompt || "";
+  }
+
+  // Default behavior: use builtin prompt
   const basePrompt = DEFAULT_SYSTEM_PROMPT;
 
   if (userPrompt) {

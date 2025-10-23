@@ -307,3 +307,32 @@ export function useProjectContextLoad() {
     store: settingsStore,
   });
 }
+
+/**
+ * Session-level flag to disable builtin system prompt (not persisted)
+ * When true, only userSystemPrompt will be used
+ */
+const disableBuiltinSystemPromptAtom = atom<boolean>(false);
+
+/**
+ * Sets whether to disable builtin system prompt for current session
+ */
+export function setDisableBuiltinSystemPrompt(disable: boolean) {
+  settingsStore.set(disableBuiltinSystemPromptAtom, disable);
+}
+
+/**
+ * Gets whether builtin system prompt is disabled for current session
+ */
+export function getDisableBuiltinSystemPrompt(): boolean {
+  return settingsStore.get(disableBuiltinSystemPromptAtom);
+}
+
+/**
+ * Hook to use disable builtin system prompt state
+ */
+export function useDisableBuiltinSystemPrompt() {
+  return useAtom(disableBuiltinSystemPromptAtom, {
+    store: settingsStore,
+  });
+}
