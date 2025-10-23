@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { SettingItem } from "@/components/ui/setting-item";
 import { ObsidianNativeSelect } from "@/components/ui/obsidian-native-select";
-import { SystemPromptManagerDialog, SystemPrompt } from "@/components/system-prompt-manager-dialog";
+import { SystemPromptManagerModal, SystemPrompt } from "@/components/system-prompt-manager-dialog";
 import { logFileManager } from "@/logFileManager";
 import { flushRecordedPromptPayloadToLog } from "@/LLMProviders/chainRunner/utils/promptPayloadRecorder";
 import { updateSetting, useSettingsValue } from "@/settings/model";
@@ -47,7 +47,6 @@ export const AdvancedSettings: React.FC = () => {
   const settings = useSettingsValue();
   const [prompts, setPrompts] = useState<SystemPrompt[]>(BUILT_IN_TEMPLATES);
   const [selectedPromptId, setSelectedPromptId] = useState<string>("default");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("systemPrompts");
@@ -69,6 +68,13 @@ export const AdvancedSettings: React.FC = () => {
   const handleSelectChange = (value: string) => {
     setSelectedPromptId(value);
     localStorage.setItem("selectedPromptId", value);
+  };
+
+  const handleOpenModal = () => {
+    const modal = new SystemPromptManagerModal(app, prompts, (updatedPrompts) => {
+      setPrompts(updatedPrompts);
+    });
+    modal.open();
   };
 
   return (
@@ -94,12 +100,7 @@ export const AdvancedSettings: React.FC = () => {
               containerClassName="tw-flex-1"
             />
 
-            <Button
-              variant="default"
-              size="icon"
-              onClick={() => setIsDialogOpen(true)}
-              title="Manage prompts"
-            >
+            <Button variant="default" size="icon" onClick={handleOpenModal} title="Manage prompts">
               <Settings className="tw-size-4" />
             </Button>
           </div>
@@ -157,13 +158,6 @@ export const AdvancedSettings: React.FC = () => {
           </Button>
         </SettingItem>
       </section>
-
-      <SystemPromptManagerDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        prompts={prompts}
-        onPromptsChange={setPrompts}
-      />
     </div>
   );
 };
