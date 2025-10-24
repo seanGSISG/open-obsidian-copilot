@@ -1,77 +1,40 @@
 import { Button } from "@/components/ui/button";
 import { SettingItem } from "@/components/ui/setting-item";
 import { ObsidianNativeSelect } from "@/components/ui/obsidian-native-select";
-import { SystemPrompt, SystemPromptManagerModal } from "@/components/system-prompt-manager-dialog";
 import { logFileManager } from "@/logFileManager";
 import { flushRecordedPromptPayloadToLog } from "@/LLMProviders/chainRunner/utils/promptPayloadRecorder";
 import { updateSetting, useSettingsValue } from "@/settings/model";
 import { Settings } from "lucide-react";
 import React, { useEffect, useState } from "react";
-
-// Built-in templates
-const BUILT_IN_TEMPLATES: SystemPrompt[] = [
-  {
-    id: "default",
-    name: "Default Assistant",
-    content: "You are a helpful AI assistant. Answer questions clearly and concisely.",
-    isBuiltIn: true,
-    exampleUrl: "https://example.com/default-assistant",
-  },
-  {
-    id: "professional",
-    name: "Professional Tone",
-    content:
-      "You are a professional AI assistant. Maintain a formal, business-appropriate tone in all responses. Provide detailed, well-structured answers.",
-    isBuiltIn: true,
-    exampleUrl: "https://example.com/professional-tone",
-  },
-  {
-    id: "creative",
-    name: "Creative Writer",
-    content:
-      "You are a creative AI assistant with a flair for storytelling and imaginative thinking. Use vivid language and engaging narratives in your responses.",
-    isBuiltIn: true,
-    exampleUrl: "https://example.com/creative-writer",
-  },
-  {
-    id: "technical",
-    name: "Technical Expert",
-    content:
-      "You are a technical AI assistant specializing in programming and technology. Provide detailed technical explanations with code examples when relevant.",
-    isBuiltIn: true,
-    exampleUrl: "https://example.com/technical-expert",
-  },
-];
+import { UserSystemPrompt, SystemPromptManager, SystemPromptManagerModal } from "@/system-prompts";
 
 export const AdvancedSettings: React.FC = () => {
   const settings = useSettingsValue();
-  const [prompts, setPrompts] = useState<SystemPrompt[]>(BUILT_IN_TEMPLATES);
-  const [selectedPromptId, setSelectedPromptId] = useState<string>("default");
+  const [prompts, setPrompts] = useState<UserSystemPrompt[]>([]);
+  const [selectedPromptTitle, setSelectedPromptTitle] = useState<string>("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("systemPrompts");
-    if (saved) {
-      try {
-        const savedPrompts = JSON.parse(saved);
-        setPrompts([...BUILT_IN_TEMPLATES, ...savedPrompts]);
-      } catch (e) {
-        console.error("Failed to load saved prompts:", e);
-      }
-    }
+    // Load system prompts from SystemPromptManager
+    const manager = SystemPromptManager.getInstance();
+    const loadedPrompts = manager.getPrompts();
+    setPrompts(loadedPrompts);
 
-    const savedSelected = localStorage.getItem("selectedPromptId");
+    // Load selected prompt title from localStorage (for backwards compatibility)
+    const savedSelected = localStorage.getItem("selectedPromptTitle");
     if (savedSelected) {
-      setSelectedPromptId(savedSelected);
+      setSelectedPromptTitle(savedSelected);
     }
   }, []);
 
   const handleSelectChange = (value: string) => {
-    setSelectedPromptId(value);
-    localStorage.setItem("selectedPromptId", value);
+    setSelectedPromptTitle(value);
+    localStorage.setItem("selectedPromptTitle", value);
   };
 
   const handleOpenModal = () => {
-    const modal = new SystemPromptManagerModal(app, prompts, (updatedPrompts) => {
+    const manager = SystemPromptManager.getInstance();
+    const modal = new SystemPromptManagerModal(app, manager.getPrompts(), async () => {
+      const updatedPrompts = manager.getPrompts();
       setPrompts(updatedPrompts);
     });
     modal.open();
@@ -90,11 +53,11 @@ export const AdvancedSettings: React.FC = () => {
         >
           <div className="tw-flex tw-items-center tw-gap-3">
             <ObsidianNativeSelect
-              value={selectedPromptId}
+              value={selectedPromptTitle}
               onChange={(e) => handleSelectChange(e.target.value)}
               options={prompts.map((prompt) => ({
-                label: `${prompt.name}${prompt.isBuiltIn ? " (Built-in)" : ""}`,
-                value: prompt.id,
+                label: prompt.title,
+                value: prompt.title,
               }))}
               placeholder="Select a system prompt"
               containerClassName="tw-flex-1"

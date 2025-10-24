@@ -10,6 +10,8 @@ import { App, Modal, Platform } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import { useSettingsValue } from "@/settings/model";
 import { Separator } from "@/components/ui/separator";
+import { UserSystemPrompt } from "@/system-prompts/type";
+import { SystemPromptManager } from "@/system-prompts/systemPromptManager";
 
 // Built-in templates
 const BUILT_IN_TEMPLATES = [
@@ -46,7 +48,8 @@ const BUILT_IN_TEMPLATES = [
   },
 ];
 
-export interface SystemPrompt {
+// Template interface for built-in templates
+interface Template {
   id: string;
   name: string;
   content: string;
@@ -60,8 +63,8 @@ type FormErrors = {
 };
 
 interface SystemPromptManagerDialogContentProps {
-  prompts: SystemPrompt[];
-  onPromptsChange: (prompts: SystemPrompt[]) => void;
+  prompts: UserSystemPrompt[];
+  onPromptsChange: () => Promise<void>;
   contentEl: HTMLElement;
   onClose: () => void;
 }
@@ -74,125 +77,122 @@ export function SystemPromptManagerDialogContent({
 }: SystemPromptManagerDialogContentProps) {
   const settings = useSettingsValue();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingPrompt, setEditingPrompt] = useState<SystemPrompt | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState<UserSystemPrompt | null>(null);
   const [newPromptName, setNewPromptName] = useState("");
   const [newPromptContent, setNewPromptContent] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const saveToLocalStorage = (updatedPrompts: SystemPrompt[]) => {
-    const customPrompts = updatedPrompts.filter((p) => !p.isBuiltIn);
-    localStorage.setItem("systemPrompts", JSON.stringify(customPrompts));
-  };
+  const manager = SystemPromptManager.getInstance();
 
-  const handleCreatePrompt = () => {
-    const newErrors: FormErrors = {};
-
-    if (!newPromptName.trim()) {
-      newErrors.name = "Name is required";
-    } else if (prompts.some((p) => p.name === newPromptName.trim())) {
-      newErrors.name = "A prompt with this name already exists";
-    }
+  /**
+   * Create a new system prompt using SystemPromptManager
+   */
+  const handleCreatePrompt = async () => {
+    setErrors({});
 
     if (!newPromptContent.trim()) {
-      newErrors.content = 'Prompt is required"';
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      setErrors({ content: "Prompt is required" });
       return;
     }
 
-    const newPrompt: SystemPrompt = {
-      id: `custom-${Date.now()}`,
-      name: newPromptName.trim(),
-      content: newPromptContent.trim(),
-      isBuiltIn: false,
-    };
+    try {
+      const now = Date.now();
+      const newPrompt: UserSystemPrompt = {
+        title: newPromptName.trim(),
+        content: newPromptContent.trim(),
+        createdMs: now,
+        modifiedMs: now,
+        lastUsedMs: 0,
+      };
 
-    const updatedPrompts = [...prompts, newPrompt];
-    onPromptsChange(updatedPrompts);
-    saveToLocalStorage(updatedPrompts);
+      await manager.createPrompt(newPrompt);
+      await onPromptsChange();
 
-    setNewPromptName("");
-    setNewPromptContent("");
-    setErrors({});
+      setNewPromptName("");
+      setNewPromptContent("");
+      setErrors({});
+    } catch (error) {
+      console.error("Failed to create system prompt:", error);
+      setErrors({ name: error.message });
+    }
   };
 
-  const handleUpdatePrompt = () => {
+  /**
+   * Update an existing system prompt using SystemPromptManager
+   */
+  const handleUpdatePrompt = async () => {
     if (!editingPrompt) {
       return;
     }
 
-    const newErrors: FormErrors = {};
-
-    if (!newPromptName.trim()) {
-      newErrors.name = "Name is required";
-    } else if (prompts.some((p) => p.name === newPromptName.trim() && p.id !== editingPrompt.id)) {
-      newErrors.name = "A prompt with this name already exists";
-    }
+    setErrors({});
 
     if (!newPromptContent.trim()) {
-      newErrors.content = "Content is required";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      setErrors({ content: "Content is required" });
       return;
     }
 
-    const updatedPrompts = prompts.map((p) =>
-      p.id === editingPrompt.id
-        ? { ...p, name: newPromptName.trim(), content: newPromptContent.trim() }
-        : p
-    );
+    try {
+      const updatedPrompt: UserSystemPrompt = {
+        ...editingPrompt,
+        title: newPromptName.trim(),
+        content: newPromptContent.trim(),
+        modifiedMs: Date.now(),
+      };
 
-    onPromptsChange(updatedPrompts);
-    saveToLocalStorage(updatedPrompts);
+      await manager.updatePrompt(editingPrompt.title, updatedPrompt);
+      await onPromptsChange();
 
-    setEditingPrompt(null);
-    setNewPromptName("");
-    setNewPromptContent("");
-    setErrors({});
-    setIsEditDialogOpen(false);
-  };
-
-  const handleDeletePrompt = (id: string) => {
-    const promptToDelete = prompts.find((p) => p.id === id);
-    if (promptToDelete?.isBuiltIn) {
-      return;
+      setEditingPrompt(null);
+      setNewPromptName("");
+      setNewPromptContent("");
+      setErrors({});
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error("Failed to update system prompt:", error);
+      setErrors({ name: error.message });
     }
-
-    const updatedPrompts = prompts.filter((p) => p.id !== id);
-    onPromptsChange(updatedPrompts);
-    saveToLocalStorage(updatedPrompts);
   };
 
-  const handleDuplicatePrompt = (prompt: SystemPrompt) => {
-    const duplicatedPrompt: SystemPrompt = {
-      id: `custom-${Date.now()}`,
-      name: `${prompt.name} (Copy)`,
-      content: prompt.content,
-      isBuiltIn: false,
-    };
-
-    const updatedPrompts = [...prompts, duplicatedPrompt];
-    onPromptsChange(updatedPrompts);
-    saveToLocalStorage(updatedPrompts);
-  };
-
-  const openEditDialog = (prompt: SystemPrompt) => {
-    if (prompt.isBuiltIn) {
-      handleDuplicatePrompt(prompt);
-      return;
+  /**
+   * Delete a system prompt using SystemPromptManager
+   */
+  const handleDeletePrompt = async (title: string) => {
+    try {
+      await manager.deletePrompt(title);
+      await onPromptsChange();
+    } catch (error) {
+      console.error("Failed to delete system prompt:", error);
     }
+  };
+
+  /**
+   * Duplicate a system prompt using SystemPromptManager
+   */
+  const handleDuplicatePrompt = async (prompt: UserSystemPrompt) => {
+    try {
+      await manager.duplicatePrompt(prompt);
+      await onPromptsChange();
+    } catch (error) {
+      console.error("Failed to duplicate system prompt:", error);
+    }
+  };
+
+  /**
+   * Open the edit dialog
+   */
+  const openEditDialog = (prompt: UserSystemPrompt) => {
     setEditingPrompt(prompt);
-    setNewPromptName(prompt.name);
+    setNewPromptName(prompt.title);
     setNewPromptContent(prompt.content);
     setErrors({});
     setIsEditDialogOpen(true);
   };
 
-  const handleSelectTemplate = (template: SystemPrompt) => {
+  /**
+   * Select a template and fill the content field
+   */
+  const handleSelectTemplate = (template: Template) => {
     setNewPromptContent(template.content);
   };
 
@@ -307,12 +307,12 @@ export function SystemPromptManagerDialogContent({
           <div className="tw-space-y-2">
             {userPrompts.map((prompt) => (
               <div
-                key={prompt.id}
+                key={prompt.title}
                 className="tw-space-y-2 tw-rounded-lg tw-border tw-border-solid tw-border-border tw-p-4"
               >
                 <div className="tw-flex tw-items-start tw-justify-between tw-gap-2">
                   <div className="tw-min-w-0 tw-flex-1 tw-truncate">
-                    <div className="tw-font-medium">{prompt.name}</div>
+                    <div className="tw-font-medium">{prompt.title}</div>
                     <div className="tw-mt-1 tw-line-clamp-2 tw-min-w-0 tw-flex-1  tw-truncate  tw-text-sm tw-text-muted">
                       {prompt.content}
                     </div>
@@ -337,7 +337,7 @@ export function SystemPromptManagerDialogContent({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDeletePrompt(prompt.id)}
+                      onClick={() => handleDeletePrompt(prompt.title)}
                       title="Delete"
                     >
                       <Trash2 className="tw-size-4 tw-text-error" />
@@ -411,8 +411,8 @@ export class SystemPromptManagerModal extends Modal {
 
   constructor(
     app: App,
-    private prompts: SystemPrompt[],
-    private onPromptsChange: (prompts: SystemPrompt[]) => void
+    private prompts: UserSystemPrompt[],
+    private onPromptsChange: () => Promise<void>
   ) {
     super(app);
     // @ts-ignore
