@@ -152,8 +152,8 @@ export interface CopilotSettings {
   quickCommandModelKey: string | undefined;
   /** Last checkbox state for including note context in quick command */
   quickCommandIncludeNoteContext: boolean;
-  /** Folder where system prompts are stored */
-  systemPromptsFolder: string;
+  /** Folder where user system prompts are stored */
+  userSystemPromptsFolder: string;
 }
 
 export const settingsStore = createStore();
@@ -431,9 +431,11 @@ export function sanitizeSettings(settings: CopilotSettings): CopilotSettings {
   sanitizedSettings.customPromptsFolder =
     promptsFolder.length > 0 ? promptsFolder : DEFAULT_SETTINGS.customPromptsFolder;
 
-  const systemPromptsFolder = (settingsToSanitize.systemPromptsFolder || "").trim();
-  sanitizedSettings.systemPromptsFolder =
-    systemPromptsFolder.length > 0 ? systemPromptsFolder : DEFAULT_SETTINGS.systemPromptsFolder;
+  const userSystemPromptsFolder = (settingsToSanitize.userSystemPromptsFolder || "").trim();
+  sanitizedSettings.userSystemPromptsFolder =
+    userSystemPromptsFolder.length > 0
+      ? userSystemPromptsFolder
+      : DEFAULT_SETTINGS.userSystemPromptsFolder;
 
   sanitizedSettings.qaExclusions = sanitizeQaExclusions(settingsToSanitize.qaExclusions);
 

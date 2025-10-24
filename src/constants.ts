@@ -827,7 +827,7 @@ export const DEFAULT_SETTINGS: CopilotSettings = {
   enableInlineCitations: true,
   quickCommandModelKey: undefined,
   quickCommandIncludeNoteContext: true,
-  systemPromptsFolder: DEFAULT_SYSTEM_PROMPTS_FOLDER,
+  userSystemPromptsFolder: DEFAULT_SYSTEM_PROMPTS_FOLDER,
 };
 
 export const EVENT_NAMES = {

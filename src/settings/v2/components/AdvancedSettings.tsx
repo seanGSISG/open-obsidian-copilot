@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { SettingItem } from "@/components/ui/setting-item";
 import { ObsidianNativeSelect } from "@/components/ui/obsidian-native-select";
-import { SystemPromptManagerModal, SystemPrompt } from "@/components/system-prompt-manager-dialog";
+import { SystemPrompt, SystemPromptManagerModal } from "@/components/system-prompt-manager-dialog";
 import { logFileManager } from "@/logFileManager";
 import { flushRecordedPromptPayloadToLog } from "@/LLMProviders/chainRunner/utils/promptPayloadRecorder";
 import { updateSetting, useSettingsValue } from "@/settings/model";
 import { Settings } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 // Built-in templates
 const BUILT_IN_TEMPLATES: SystemPrompt[] = [
@@ -110,8 +110,8 @@ export const AdvancedSettings: React.FC = () => {
           type="text"
           title="System Prompts Folder Name"
           description="Folder where system prompts are stored."
-          value={settings.systemPromptsFolder}
-          onChange={(value) => updateSetting("systemPromptsFolder", value)}
+          value={settings.userSystemPromptsFolder}
+          onChange={(value) => updateSetting("userSystemPromptsFolder", value)}
           placeholder="copilot/system-prompts"
         />
       </section>

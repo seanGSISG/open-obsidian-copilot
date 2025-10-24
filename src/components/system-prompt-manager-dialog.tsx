@@ -1,13 +1,15 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/ui/form-field";
 import { Copy, ExternalLink, Lightbulb, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { App, Modal, Platform } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
+import { useSettingsValue } from "@/settings/model";
+import { Separator } from "@/components/ui/separator";
 
 // Built-in templates
 const BUILT_IN_TEMPLATES = [
@@ -52,9 +54,15 @@ export interface SystemPrompt {
   exampleUrl?: string;
 }
 
+type FormErrors = {
+  name?: string;
+  content?: string;
+};
+
 interface SystemPromptManagerDialogContentProps {
   prompts: SystemPrompt[];
   onPromptsChange: (prompts: SystemPrompt[]) => void;
+  contentEl: HTMLElement;
   onClose: () => void;
 }
 
@@ -62,12 +70,14 @@ export function SystemPromptManagerDialogContent({
   prompts,
   onPromptsChange,
   onClose,
+  contentEl,
 }: SystemPromptManagerDialogContentProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const settings = useSettingsValue();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<SystemPrompt | null>(null);
   const [newPromptName, setNewPromptName] = useState("");
   const [newPromptContent, setNewPromptContent] = useState("");
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const saveToLocalStorage = (updatedPrompts: SystemPrompt[]) => {
     const customPrompts = updatedPrompts.filter((p) => !p.isBuiltIn);
@@ -75,14 +85,27 @@ export function SystemPromptManagerDialogContent({
   };
 
   const handleCreatePrompt = () => {
-    if (!newPromptName.trim() || !newPromptContent.trim()) {
+    const newErrors: FormErrors = {};
+
+    if (!newPromptName.trim()) {
+      newErrors.name = "Name is required";
+    } else if (prompts.some((p) => p.name === newPromptName.trim())) {
+      newErrors.name = "A prompt with this name already exists";
+    }
+
+    if (!newPromptContent.trim()) {
+      newErrors.content = 'Prompt is required"';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
     const newPrompt: SystemPrompt = {
       id: `custom-${Date.now()}`,
-      name: newPromptName,
-      content: newPromptContent,
+      name: newPromptName.trim(),
+      content: newPromptContent.trim(),
       isBuiltIn: false,
     };
 
@@ -92,15 +115,35 @@ export function SystemPromptManagerDialogContent({
 
     setNewPromptName("");
     setNewPromptContent("");
+    setErrors({});
   };
 
   const handleUpdatePrompt = () => {
-    if (!editingPrompt || !newPromptName.trim() || !newPromptContent.trim()) {
+    if (!editingPrompt) {
+      return;
+    }
+
+    const newErrors: FormErrors = {};
+
+    if (!newPromptName.trim()) {
+      newErrors.name = "Name is required";
+    } else if (prompts.some((p) => p.name === newPromptName.trim() && p.id !== editingPrompt.id)) {
+      newErrors.name = "A prompt with this name already exists";
+    }
+
+    if (!newPromptContent.trim()) {
+      newErrors.content = "Content is required";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
     const updatedPrompts = prompts.map((p) =>
-      p.id === editingPrompt.id ? { ...p, name: newPromptName, content: newPromptContent } : p
+      p.id === editingPrompt.id
+        ? { ...p, name: newPromptName.trim(), content: newPromptContent.trim() }
+        : p
     );
 
     onPromptsChange(updatedPrompts);
@@ -109,6 +152,7 @@ export function SystemPromptManagerDialogContent({
     setEditingPrompt(null);
     setNewPromptName("");
     setNewPromptContent("");
+    setErrors({});
     setIsEditDialogOpen(false);
   };
 
@@ -144,6 +188,7 @@ export function SystemPromptManagerDialogContent({
     setEditingPrompt(prompt);
     setNewPromptName(prompt.name);
     setNewPromptContent(prompt.content);
+    setErrors({});
     setIsEditDialogOpen(true);
   };
 
@@ -154,34 +199,41 @@ export function SystemPromptManagerDialogContent({
   const userPrompts = prompts.filter((p) => !p.isBuiltIn);
 
   return (
-    <div ref={containerRef} className="tw-max-h-[70vh] tw-overflow-y-auto tw-p-4">
+    <div className="tw-max-h-[70vh] tw-overflow-y-auto tw-p-4">
       <div className="tw-space-y-6">
         {/* Create New Section */}
-        <div className="tw-space-y-4 tw-rounded-lg tw-border tw-p-4">
-          <h3 className="tw-flex tw-items-center tw-gap-2 tw-font-semibold">
+        <div className="tw-space-y-4 tw-rounded-lg tw-border tw-border-solid tw-border-border tw-p-4">
+          <div className="tw-flex tw-items-center tw-gap-2 tw-text-xl tw-font-semibold">
             <Plus className="tw-mr-2 tw-size-4" />
             Create New Prompt
-          </h3>
+          </div>
           <div className="tw-space-y-3">
-            <div>
-              <Label htmlFor="new-name">Name</Label>
+            <FormField label="Name" required error={!!errors.name} errorMessage={errors.name}>
               <Input
-                id="new-name"
-                placeholder="e.g., My Custom Assistant"
+                placeholder="Enter prompt name. e.g:  My Custom Assistant"
                 value={newPromptName}
-                onChange={(e) => setNewPromptName(e.target.value)}
+                onChange={(e) => {
+                  setNewPromptName(e.target.value);
+                  setErrors((prev) => ({ ...prev, name: undefined }));
+                }}
               />
-            </div>
-            <div>
-              <Label htmlFor="new-content">Content</Label>
+            </FormField>
+            <FormField
+              label="Prompt"
+              required
+              error={!!errors.content}
+              errorMessage={errors.content}
+            >
               <div className="tw-relative">
                 <Textarea
-                  id="new-content"
                   placeholder="Enter your system prompt here..."
                   value={newPromptContent}
-                  onChange={(e) => setNewPromptContent(e.target.value)}
+                  onChange={(e) => {
+                    setNewPromptContent(e.target.value);
+                    setErrors((prev) => ({ ...prev, content: undefined }));
+                  }}
                   rows={6}
-                  className="tw-pr-12"
+                  className="tw-min-h-[80px] tw-w-full tw-pr-8"
                 />
                 <TooltipProvider>
                   <Popover>
@@ -201,36 +253,30 @@ export function SystemPromptManagerDialogContent({
                         <p>Choose from templates</p>
                       </TooltipContent>
                     </Tooltip>
-                    <PopoverContent
-                      className="tw-w-80 tw-p-3"
-                      align="end"
-                      container={containerRef.current}
-                    >
+                    <PopoverContent className="tw-w-80 tw-p-3" align="end" container={contentEl}>
                       <div className="tw-space-y-2">
-                        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Choose a Template</h4>
+                        <div className="tw-mb-2 tw-text-sm tw-font-medium">Choose a Template</div>
                         {BUILT_IN_TEMPLATES.map((template) => (
                           <div
                             key={template.id}
-                            className="tw-flex tw-items-center tw-gap-2 tw-rounded-lg tw-border tw-p-2 tw-transition-colors hover:tw-bg-muted/50"
+                            onClick={() => handleSelectTemplate(template)}
+                            className="tw-flex tw-min-w-0  tw-items-center tw-gap-2 tw-truncate tw-rounded-lg tw-border tw-border-solid tw-border-border tw-p-2 tw-transition-colors hover:tw-bg-modifier-hover"
                           >
-                            <button
-                              onClick={() => handleSelectTemplate(template)}
-                              className="tw-flex-1 tw-text-left"
-                            >
-                              <h5 className="tw-text-sm tw-font-medium">{template.name}</h5>
-                              <p className="tw-mt-0.5 tw-line-clamp-1 tw-text-xs tw-text-muted">
+                            <div className="tw-flex tw-min-w-0 tw-flex-col">
+                              <div className="tw-text-sm tw-font-medium">{template.name}</div>
+                              <div className="tw-mt-0.5 tw-min-w-0  tw-flex-1 tw-truncate tw-text-xs tw-text-muted">
                                 {template.content}
-                              </p>
-                            </button>
+                              </div>
+                            </div>
                             {template.exampleUrl && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="tw-size-7 tw-shrink-0"
                                 onClick={() => window.open(template.exampleUrl, "_blank")}
-                                title="View example"
+                                title="View prompt example"
                               >
-                                <ExternalLink className="tw-size-3" />
+                                <ExternalLink className="tw-size-4" />
                               </Button>
                             )}
                           </div>
@@ -240,65 +286,68 @@ export function SystemPromptManagerDialogContent({
                   </Popover>
                 </TooltipProvider>
               </div>
-            </div>
+            </FormField>
             <Button onClick={handleCreatePrompt} className="tw-w-full">
               Create Prompt
             </Button>
-            <div className="tw-flex tw-gap-2 tw-rounded-lg tw-p-3 tw-text-sm tw-text-muted tw-bg-muted/50">
-              <Lightbulb className="tw-mt-0.5 tw-size-4 tw-shrink-0" />
-              <p>
-                Created prompts will be saved to{" "}
-                <code className="tw-font-mono">copilot/system-prompt</code>.
-              </p>
+            <div className="tw-mb-4 tw-flex tw-items-start tw-gap-2 tw-rounded-md tw-border tw-border-solid tw-border-border tw-p-4 tw-text-muted">
+              <Lightbulb className="tw-size-5" />{" "}
+              <div>
+                system prompts are automatically loaded from .md files in your system prompts folder{" "}
+                <strong>{settings.userSystemPromptsFolder}</strong>. Modifying the files will also
+                update the system prompt settings.
+              </div>
             </div>
           </div>
         </div>
 
-        {userPrompts.length > 0 && (
-          <div className="tw-space-y-3">
-            <h3 className="tw-font-semibold">Your Prompts</h3>
-            <div className="tw-space-y-2">
-              {userPrompts.map((prompt) => (
-                <div key={prompt.id} className="tw-space-y-2 tw-rounded-lg tw-border tw-p-4">
-                  <div className="tw-flex tw-items-start tw-justify-between tw-gap-2">
-                    <div className="tw-min-w-0 tw-flex-1">
-                      <h4 className="tw-font-medium">{prompt.name}</h4>
-                      <p className="tw-mt-1 tw-line-clamp-2 tw-text-sm tw-text-muted">
-                        {prompt.content}
-                      </p>
-                    </div>
-                    <div className="tw-flex tw-gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDuplicatePrompt(prompt)}
-                        title="Duplicate"
-                      >
-                        <Copy className="tw-size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(prompt)}
-                        title="Edit"
-                      >
-                        <Pencil className="tw-size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeletePrompt(prompt.id)}
-                        title="Delete"
-                      >
-                        <Trash2 className="tw-size-4 tw-text-error" />
-                      </Button>
+        <div className="tw-space-y-3">
+          <div className="tw-text-xl tw-font-semibold">Your Prompts</div>
+          <Separator />
+          <div className="tw-space-y-2">
+            {userPrompts.map((prompt) => (
+              <div
+                key={prompt.id}
+                className="tw-space-y-2 tw-rounded-lg tw-border tw-border-solid tw-border-border tw-p-4"
+              >
+                <div className="tw-flex tw-items-start tw-justify-between tw-gap-2">
+                  <div className="tw-min-w-0 tw-flex-1 tw-truncate">
+                    <div className="tw-font-medium">{prompt.name}</div>
+                    <div className="tw-mt-1 tw-line-clamp-2 tw-min-w-0 tw-flex-1  tw-truncate  tw-text-sm tw-text-muted">
+                      {prompt.content}
                     </div>
                   </div>
+                  <div className="tw-flex tw-gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDuplicatePrompt(prompt)}
+                      title="Duplicate"
+                    >
+                      <Copy className="tw-size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEditDialog(prompt)}
+                      title="Edit"
+                    >
+                      <Pencil className="tw-size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeletePrompt(prompt.id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="tw-size-4 tw-text-error" />
+                    </Button>
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit Dialog Section - Inline */}
@@ -308,23 +357,32 @@ export function SystemPromptManagerDialogContent({
             <h2 className="tw-mb-2 tw-text-lg tw-font-semibold">Edit System Prompt</h2>
             <p className="tw-mb-4 tw-text-sm tw-text-muted">Update your custom system prompt.</p>
             <div className="tw-space-y-4">
-              <div>
-                <Label htmlFor="edit-name">Name</Label>
+              <FormField label="Name" required error={!!errors.name} errorMessage={errors.name}>
                 <Input
                   id="edit-name"
                   value={newPromptName}
-                  onChange={(e) => setNewPromptName(e.target.value)}
+                  onChange={(e) => {
+                    setNewPromptName(e.target.value);
+                    setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-content">Content</Label>
+              </FormField>
+              <FormField
+                label="Content"
+                required
+                error={!!errors.content}
+                errorMessage={errors.content}
+              >
                 <Textarea
                   id="edit-content"
                   value={newPromptContent}
-                  onChange={(e) => setNewPromptContent(e.target.value)}
+                  onChange={(e) => {
+                    setNewPromptContent(e.target.value);
+                    setErrors((prev) => ({ ...prev, content: undefined }));
+                  }}
                   rows={12}
                 />
-              </div>
+              </FormField>
               <div className="tw-flex tw-gap-2">
                 <Button onClick={handleUpdatePrompt} className="tw-flex-1">
                   Save Changes
@@ -334,6 +392,7 @@ export function SystemPromptManagerDialogContent({
                   onClick={() => {
                     setEditingPrompt(null);
                     setIsEditDialogOpen(false);
+                    setErrors({});
                   }}
                 >
                   Cancel
@@ -374,6 +433,7 @@ export class SystemPromptManagerModal extends Modal {
       <SystemPromptManagerDialogContent
         prompts={this.prompts}
         onPromptsChange={this.onPromptsChange}
+        contentEl={contentEl}
         onClose={() => this.close()}
       />
     );
