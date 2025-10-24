@@ -2,13 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ObsidianNativeSelect } from "@/components/ui/obsidian-native-select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertTriangle, RotateCcw, Settings, Settings2 } from "lucide-react";
@@ -22,6 +16,12 @@ import {
 } from "@/aiParams";
 import { getSettings, updateSetting } from "@/settings/model";
 import { debounce } from "@/utils";
+import {
+  useSystemPrompts,
+  useSelectedPrompt,
+  getDefaultSystemPromptTitle,
+  SystemPromptManagerModal,
+} from "@/system-prompts";
 
 interface ChatSettingsPopoverProps {
   onManagePrompts?: () => void;
@@ -38,7 +38,14 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
 
   // 本地编辑状态
   const [localModel, setLocalModel] = useState<CustomModel | undefined>(originalModel);
-  const [systemPrompt, setSystemPrompt] = useState("default");
+
+  // System prompt state (session-level, in-memory)
+  const prompts = useSystemPrompts();
+  const [sessionPrompt, setSessionPrompt] = useSelectedPrompt();
+  const globalDefault = getDefaultSystemPromptTitle();
+
+  // Display value: session override || global default || ""
+  const displayValue = sessionPrompt || globalDefault || "";
 
   // 从 session atom 读取状态
   const [disableBuiltin, setDisableBuiltin] = useState(getDisableBuiltinSystemPrompt());
@@ -98,12 +105,13 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
       handleParamReset("reasoningEffort");
       handleParamReset("verbosity");
     }
-    setSystemPrompt("default");
+    // Reset session prompt to use global default
+    setSessionPrompt("");
     setDisableBuiltin(false);
     setShowConfirmation(false);
     // 清除 session 设置
     setDisableBuiltinSystemPrompt(false);
-  }, [localModel, handleParamReset]);
+  }, [localModel, handleParamReset, setSessionPrompt]);
 
   const handleDisableBuiltinToggle = (checked: boolean) => {
     if (checked) {
@@ -125,6 +133,11 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
 
   const cancelDisableBuiltin = () => {
     setShowConfirmation(false);
+  };
+
+  const handleManagePrompts = () => {
+    const modal = new SystemPromptManagerModal(app);
+    modal.open();
   };
 
   if (!localModel) {
@@ -162,28 +175,36 @@ export function ChatSettingsPopover({ onManagePrompts }: ChatSettingsPopoverProp
                   <Label htmlFor="system-prompt" className="tw-text-sm sm:tw-min-w-fit">
                     System Prompt
                   </Label>
-                  <div className="tw-flex tw-items-center tw-gap-2 sm:tw-flex-1">
-                    <Select value={systemPrompt} onValueChange={setSystemPrompt}>
-                      <SelectTrigger id="system-prompt" className="tw-flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="creative">Creative</SelectItem>
-                        <SelectItem value="precise">Precise</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2 sm:tw-flex-1">
+                    <ObsidianNativeSelect
+                      value={displayValue}
+                      onChange={(e) => setSessionPrompt(e.target.value)}
+                      options={prompts.map((prompt) => ({
+                        label:
+                          prompt.title === globalDefault
+                            ? `${prompt.title} (Global)`
+                            : prompt.title,
+                        value: prompt.title,
+                      }))}
+                      placeholder="Select system prompt"
+                      containerClassName="tw-flex-1"
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
                       className="tw-size-9 tw-shrink-0"
-                      onClick={onManagePrompts}
+                      onClick={handleManagePrompts}
+                      title="Manage System Prompts"
                     >
                       <Settings2 className="tw-size-4" />
                     </Button>
                   </div>
                 </div>
+
+                {/* Status indicator */}
+                {sessionPrompt && sessionPrompt !== globalDefault && (
+                  <div className="tw-text-xs tw-text-muted">Session override active</div>
+                )}
               </div>
 
               {/* Model Parameters Editor */}

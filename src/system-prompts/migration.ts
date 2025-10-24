@@ -1,12 +1,12 @@
-import { Vault, TFile } from "obsidian";
+import { TFile, Vault } from "obsidian";
 import {
-  getSystemPromptsFolder,
-  getPromptFilePath,
   ensurePromptFrontmatter,
+  getPromptFilePath,
+  getSystemPromptsFolder,
   loadAllSystemPrompts,
 } from "@/system-prompts/systemPromptUtils";
 import { UserSystemPrompt } from "@/system-prompts/type";
-import { logInfo, logError } from "@/logger";
+import { logError, logInfo } from "@/logger";
 import { getSettings, updateSetting } from "@/settings/model";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 
@@ -19,6 +19,11 @@ async function ensureFolder(vault: Vault, folderPath: string): Promise<void> {
     await vault.createFolder(folderPath);
   }
 }
+
+/**
+ * Default name for migrated system prompt
+ */
+const MIGRATED_PROMPT_NAME = "Migrated Custom System Prompt";
 
 /**
  * Migrate the legacy userSystemPrompt from settings to a file
@@ -42,15 +47,16 @@ export async function migrateSystemPromptsFromSettings(vault: Vault): Promise<vo
     await ensureFolder(vault, folder);
 
     // Create a prompt file with default name
-    const promptName = "My Custom System Prompt";
+    const promptName = MIGRATED_PROMPT_NAME;
     const filePath = getPromptFilePath(promptName);
     const existingFile = vault.getAbstractFileByPath(filePath);
 
     // Skip if file already exists (avoid overwriting)
     if (existingFile) {
       logInfo(`File "${promptName}" already exists, skipping legacy prompt migration`);
-      // Clear the legacy field anyway since file exists
+      // Clear the legacy field and set as default
       updateSetting("userSystemPrompt", "");
+      updateSetting("defaultSystemPromptTitle", promptName);
       return;
     }
 
@@ -74,6 +80,9 @@ export async function migrateSystemPromptsFromSettings(vault: Vault): Promise<vo
 
       // Clear the legacy userSystemPrompt field after successful migration
       updateSetting("userSystemPrompt", "");
+
+      // Set the migrated prompt as the new default
+      updateSetting("defaultSystemPromptTitle", promptName);
     }
 
     // Reload all prompts to update cache
@@ -83,7 +92,7 @@ export async function migrateSystemPromptsFromSettings(vault: Vault): Promise<vo
     new ConfirmModal(
       app,
       () => {},
-      `We have upgraded your system prompt to the new file-based format. It is now stored as a note in ${folder}.\n\nYou can now:\n• Edit your system prompt directly in the file\n• Create multiple system prompts\n• Manage prompts through the settings UI`,
+      `We have upgraded your system prompt to the new file-based format. It is now stored as "${promptName}" in ${folder}.\n\nYou can now:\n• Edit your system prompt directly in the file\n• Create multiple system prompts\n• Manage prompts through the settings UI\n\nYour migrated prompt has been set as the default system prompt.`,
       "🚀 System Prompt Upgraded",
       "OK",
       ""

@@ -5,38 +5,20 @@ import { logFileManager } from "@/logFileManager";
 import { flushRecordedPromptPayloadToLog } from "@/LLMProviders/chainRunner/utils/promptPayloadRecorder";
 import { updateSetting, useSettingsValue } from "@/settings/model";
 import { Settings } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { UserSystemPrompt, SystemPromptManager, SystemPromptManagerModal } from "@/system-prompts";
+import React from "react";
+import { SystemPromptManagerModal } from "@/system-prompts";
+import { useSystemPrompts } from "@/system-prompts/state";
 
 export const AdvancedSettings: React.FC = () => {
   const settings = useSettingsValue();
-  const [prompts, setPrompts] = useState<UserSystemPrompt[]>([]);
-  const [selectedPromptTitle, setSelectedPromptTitle] = useState<string>("");
-
-  useEffect(() => {
-    // Load system prompts from SystemPromptManager
-    const manager = SystemPromptManager.getInstance();
-    const loadedPrompts = manager.getPrompts();
-    setPrompts(loadedPrompts);
-
-    // Load selected prompt title from localStorage (for backwards compatibility)
-    const savedSelected = localStorage.getItem("selectedPromptTitle");
-    if (savedSelected) {
-      setSelectedPromptTitle(savedSelected);
-    }
-  }, []);
+  const prompts = useSystemPrompts();
 
   const handleSelectChange = (value: string) => {
-    setSelectedPromptTitle(value);
-    localStorage.setItem("selectedPromptTitle", value);
+    updateSetting("defaultSystemPromptTitle", value);
   };
 
   const handleOpenModal = () => {
-    const manager = SystemPromptManager.getInstance();
-    const modal = new SystemPromptManagerModal(app, manager.getPrompts(), async () => {
-      const updatedPrompts = manager.getPrompts();
-      setPrompts(updatedPrompts);
-    });
+    const modal = new SystemPromptManagerModal(app);
     modal.open();
   };
 
@@ -53,12 +35,14 @@ export const AdvancedSettings: React.FC = () => {
         >
           <div className="tw-flex tw-items-center tw-gap-3">
             <ObsidianNativeSelect
-              value={selectedPromptTitle}
+              value={settings.defaultSystemPromptTitle}
               onChange={(e) => handleSelectChange(e.target.value)}
-              options={prompts.map((prompt) => ({
-                label: prompt.title,
-                value: prompt.title,
-              }))}
+              options={[
+                ...prompts.map((prompt) => ({
+                  label: prompt.title,
+                  value: prompt.title,
+                })),
+              ]}
               placeholder="Select a system prompt"
               containerClassName="tw-flex-1"
             />

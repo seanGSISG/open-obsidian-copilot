@@ -2,6 +2,7 @@ import { CustomModel, getDisableBuiltinSystemPrompt, ProjectConfig } from "@/aiP
 import { atom, createStore, useAtomValue } from "jotai";
 import { v4 as uuidv4 } from "uuid";
 import { UserMemoryManager } from "@/memory/UserMemoryManager";
+import { getEffectiveSystemPromptContent } from "@/system-prompts/state";
 
 import { AcceptKeyOption } from "@/autocomplete/codemirrorIntegration";
 import { type ChainType } from "@/chainFactory";
@@ -71,7 +72,7 @@ export interface CopilotSettings {
   maxTokens: number;
   contextTurns: number;
   lastDismissedVersion: string | null;
-  // Do not use this directly, use getSystemPrompt() instead
+  // DEPRECATED: Do not use this directly, migrated to file-based system prompts
   userSystemPrompt: string;
   openAIProxyBaseUrl: string;
   openAIEmbeddingProxyBaseUrl: string;
@@ -154,6 +155,12 @@ export interface CopilotSettings {
   quickCommandIncludeNoteContext: boolean;
   /** Folder where user system prompts are stored */
   userSystemPromptsFolder: string;
+  /**
+   * Global default system prompt title
+   * Used as the default for all new chat sessions
+   * Empty string means no custom system prompt (use builtin)
+   */
+  defaultSystemPromptTitle: string;
 }
 
 export const settingsStore = createStore();
@@ -443,14 +450,16 @@ export function sanitizeSettings(settings: CopilotSettings): CopilotSettings {
 }
 
 export function getSystemPrompt(): string {
-  const userPrompt = getSettings().userSystemPrompt;
+  // Get effective user prompt from new system-prompts state
+  // Priority: session override > global default > ""
+  const userPrompt = getEffectiveSystemPromptContent();
 
   // Check if builtin prompt is disabled for current session
   const disableBuiltin = getDisableBuiltinSystemPrompt();
 
   if (disableBuiltin) {
-    // Only return user custom prompt, if empty return empty string
-    return userPrompt || "";
+    // Only return user custom prompt
+    return userPrompt;
   }
 
   // Default behavior: use builtin prompt

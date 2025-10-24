@@ -1,6 +1,6 @@
 import { Plugin, TFile, Vault } from "obsidian";
 import { isSystemPromptFile, getSystemPromptsFolder } from "@/system-prompts/systemPromptUtils";
-import { isPendingFileWrite } from "@/system-prompts/state";
+import { isPendingFileWrite, initializeSessionPromptFromDefault } from "@/system-prompts/state";
 import { SystemPromptManager } from "@/system-prompts/systemPromptManager";
 import { logInfo, logError } from "@/logger";
 import debounce from "lodash.debounce";
@@ -26,6 +26,8 @@ export class SystemPromptRegister {
    */
   async initialize(): Promise<void> {
     await this.manager.initialize();
+    // Initialize session prompt from global default
+    initializeSessionPromptFromDefault();
   }
 
   /**

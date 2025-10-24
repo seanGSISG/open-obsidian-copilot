@@ -12,6 +12,7 @@ import { useSettingsValue } from "@/settings/model";
 import { Separator } from "@/components/ui/separator";
 import { UserSystemPrompt } from "@/system-prompts/type";
 import { SystemPromptManager } from "@/system-prompts/systemPromptManager";
+import { useSystemPrompts } from "@/system-prompts/state";
 
 // Built-in templates
 const BUILT_IN_TEMPLATES = [
@@ -63,29 +64,27 @@ type FormErrors = {
 };
 
 interface SystemPromptManagerDialogContentProps {
-  prompts: UserSystemPrompt[];
-  onPromptsChange: () => Promise<void>;
   contentEl: HTMLElement;
   onClose: () => void;
 }
 
 export function SystemPromptManagerDialogContent({
-  prompts,
-  onPromptsChange,
   onClose,
   contentEl,
 }: SystemPromptManagerDialogContentProps) {
   const settings = useSettingsValue();
+  const prompts = useSystemPrompts(); // Use Jotai hook - auto-updates when cache changes
+  const manager = SystemPromptManager.getInstance();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<UserSystemPrompt | null>(null);
   const [newPromptName, setNewPromptName] = useState("");
   const [newPromptContent, setNewPromptContent] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const manager = SystemPromptManager.getInstance();
-
   /**
    * Create a new system prompt using SystemPromptManager
+   * Note: manager.createPrompt() calls loadAllSystemPrompts() which updates the cache,
+   * triggering automatic re-render via useSystemPrompts() hook
    */
   const handleCreatePrompt = async () => {
     setErrors({});
@@ -106,7 +105,7 @@ export function SystemPromptManagerDialogContent({
       };
 
       await manager.createPrompt(newPrompt);
-      await onPromptsChange();
+      // No need to manually refresh - useSystemPrompts() hook will auto-update
 
       setNewPromptName("");
       setNewPromptContent("");
@@ -119,6 +118,8 @@ export function SystemPromptManagerDialogContent({
 
   /**
    * Update an existing system prompt using SystemPromptManager
+   * Note: manager.updatePrompt() calls loadAllSystemPrompts() which updates the cache,
+   * triggering automatic re-render via useSystemPrompts() hook
    */
   const handleUpdatePrompt = async () => {
     if (!editingPrompt) {
@@ -141,7 +142,7 @@ export function SystemPromptManagerDialogContent({
       };
 
       await manager.updatePrompt(editingPrompt.title, updatedPrompt);
-      await onPromptsChange();
+      // No need to manually refresh - useSystemPrompts() hook will auto-update
 
       setEditingPrompt(null);
       setNewPromptName("");
@@ -156,11 +157,13 @@ export function SystemPromptManagerDialogContent({
 
   /**
    * Delete a system prompt using SystemPromptManager
+   * Note: manager.deletePrompt() calls loadAllSystemPrompts() which updates the cache,
+   * triggering automatic re-render via useSystemPrompts() hook
    */
   const handleDeletePrompt = async (title: string) => {
     try {
       await manager.deletePrompt(title);
-      await onPromptsChange();
+      // No need to manually refresh - useSystemPrompts() hook will auto-update
     } catch (error) {
       console.error("Failed to delete system prompt:", error);
     }
@@ -168,11 +171,13 @@ export function SystemPromptManagerDialogContent({
 
   /**
    * Duplicate a system prompt using SystemPromptManager
+   * Note: manager.duplicatePrompt() calls loadAllSystemPrompts() which updates the cache,
+   * triggering automatic re-render via useSystemPrompts() hook
    */
   const handleDuplicatePrompt = async (prompt: UserSystemPrompt) => {
     try {
       await manager.duplicatePrompt(prompt);
-      await onPromptsChange();
+      // No need to manually refresh - useSystemPrompts() hook will auto-update
     } catch (error) {
       console.error("Failed to duplicate system prompt:", error);
     }
@@ -409,11 +414,7 @@ export function SystemPromptManagerDialogContent({
 export class SystemPromptManagerModal extends Modal {
   private root: Root;
 
-  constructor(
-    app: App,
-    private prompts: UserSystemPrompt[],
-    private onPromptsChange: () => Promise<void>
-  ) {
+  constructor(app: App) {
     super(app);
     // @ts-ignore
     this.setTitle("Manage System Prompts");
@@ -430,12 +431,7 @@ export class SystemPromptManagerModal extends Modal {
     this.root = createRoot(contentEl);
 
     this.root.render(
-      <SystemPromptManagerDialogContent
-        prompts={this.prompts}
-        onPromptsChange={this.onPromptsChange}
-        contentEl={contentEl}
-        onClose={() => this.close()}
-      />
+      <SystemPromptManagerDialogContent contentEl={contentEl} onClose={() => this.close()} />
     );
   }
 

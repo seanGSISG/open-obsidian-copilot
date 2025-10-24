@@ -828,6 +828,7 @@ export const DEFAULT_SETTINGS: CopilotSettings = {
   quickCommandModelKey: undefined,
   quickCommandIncludeNoteContext: true,
   userSystemPromptsFolder: DEFAULT_SYSTEM_PROMPTS_FOLDER,
+  defaultSystemPromptTitle: "",
 };
 
 export const EVENT_NAMES = {

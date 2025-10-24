@@ -4,12 +4,14 @@ import {
   ensurePromptFrontmatter,
   generateCopyPromptName,
   getPromptFilePath,
+  getSystemPromptsFolder,
   loadAllSystemPrompts,
   validatePromptName,
 } from "@/system-prompts/systemPromptUtils";
 import { getCachedSystemPrompts } from "@/system-prompts/state";
 import { COPILOT_SYSTEM_PROMPT_MODIFIED } from "@/system-prompts/constants";
 import { logInfo } from "@/logger";
+import { ensureFolderExists } from "@/utils";
 
 /**
  * Singleton manager for system prompts
@@ -56,6 +58,10 @@ export class SystemPromptManager {
     }
 
     const filePath = getPromptFilePath(prompt.title);
+    const folderPath = getSystemPromptsFolder();
+
+    // Ensure nested folders are created cross-platform
+    await ensureFolderExists(folderPath);
 
     // Create the file
     await this.vault.create(filePath, prompt.content);
