@@ -6,7 +6,7 @@ First off, thank you for considering contributing to Copilot for Obsidian! It's 
 
 ### Reporting Bugs or Suggesting Enhancements
 
-Before submitting a bug report or suggestion, please check the [issues](https://github.com/logancyang/obsidian-copilot/issues) page for a list of currently known issues to ensure the bug has not already been reported. If it's a new bug or suggestion, create an issue and provide the following information:
+Before submitting a bug report or suggestion, please check the [issues](https://github.com/seanGSISG/open-obsidian-copilot/issues) page for a list of currently known issues to ensure the bug has not already been reported. If it's a new bug or suggestion, create an issue and provide the following information:
 
 - Use a clear and descriptive title.
 - Describe the exact steps which reproduce the problem in as much detail as possible.
