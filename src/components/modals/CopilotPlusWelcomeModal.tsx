@@ -24,9 +24,9 @@ function CopilotPlusWelcomeModalContent({
     <div className="tw-flex tw-flex-col tw-gap-4">
       <div>
         <p>
-          Thanks for purchasing <b>Copilot Plus</b>! You have unlocked the full power of Copilot,
-          featuring chat context, PDF and image support, exclusive chat and embedding models, and
-          much more!
+          Welcome to <b>Copilot Plus</b>! In this community fork, all Plus features are enabled
+          by default, including chat context, PDF and image support, exclusive chat and embedding
+          models, and much more!
         </p>
         <p>
           Would you like to apply the Copilot Plus settings now? You can always change this later in

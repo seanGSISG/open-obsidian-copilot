@@ -38,6 +38,8 @@ module.exports = {
       this.close = jest.fn();
       this.onOpen = jest.fn();
       this.onClose = jest.fn();
+      this.setTitle = jest.fn();
+      this.contentEl = document.createElement("div");
     }
   },
   App: jest.fn().mockImplementation(() => ({

@@ -54,18 +54,19 @@ export class CopilotPlusExpiredModal extends Modal {
     this.setTitle("Thanks for being a Copilot Plus user 👋");
   }
 
+  /**
+   * Community fork: This modal is disabled as Plus features are always enabled.
+   * Kept for backward compatibility but will not render anything.
+   */
   onOpen() {
-    const { contentEl } = this;
-    this.root = createRoot(contentEl);
-
-    const handleCancel = () => {
-      this.close();
-    };
-
-    this.root.render(<CopilotPlusExpiredModalContent onCancel={handleCancel} />);
+    // No-op: Modal disabled in community fork
+    // Plus features are always enabled, no expiration notices needed
   }
 
   onClose() {
-    this.root.unmount();
+    // Safely unmount root if it was somehow created
+    if (this.root) {
+      this.root.unmount();
+    }
   }
 }

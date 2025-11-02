@@ -5,6 +5,9 @@ import { v4 as uuidv4 } from "uuid";
 import { ChainType } from "./chainFactory";
 import { PromptSortStrategy } from "./types";
 
+// Community fork: Brevilabs API URLs kept for backward compatibility
+// These will be replaced by MCP server architecture in Phase 2
+// Plus features now require user-configured MCP servers instead of proprietary API
 export const BREVILABS_API_BASE_URL = "https://api.brevilabs.com/v1";
 export const BREVILABS_MODELS_BASE_URL = "https://models.brevilabs.com/v1";
 export const CHAT_VIEWTYPE = "copilot-chat-view";
@@ -725,8 +728,8 @@ export const RESTRICTION_MESSAGES = {
 
 export const DEFAULT_SETTINGS: CopilotSettings = {
   userId: uuidv4(),
-  isPlusUser: false,
-  plusLicenseKey: "",
+  isPlusUser: true, // Community fork: License restrictions removed - Plus features always enabled
+  plusLicenseKey: "", // DEPRECATED in community fork - License key no longer functional
   openAIApiKey: "",
   openAIOrgId: "",
   huggingfaceApiKey: "",

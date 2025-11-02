@@ -13,6 +13,8 @@
 - [ ] 1.1.3 Update `src/settings/model.ts`:
   - [ ] Set `isPlusUser: true` in `DEFAULT_SETTINGS`
   - [ ] Document deprecated license key field
+  - [ ] Add settings migration function to auto-enable Plus for existing users
+  - [ ] Add console logging for migration transparency
 - [ ] 1.1.4 Update `src/constants.ts`:
   - [ ] Add comment noting Brevilabs API will be replaced by MCP
 
@@ -40,41 +42,67 @@
   - [ ] Define `MCPSettings` interface
   - [ ] Define tool result types
 - [ ] 2.1.2 Create `src/mcp/mcpManager.ts`:
-  - [ ] Implement singleton MCPManager class
+  - [ ] Implement singleton MCPManager class (matches LLMProviderManager pattern)
+  - [ ] Plugin-scoped lifecycle (initialize on load, cleanup on unload)
   - [ ] Add server registration/removal methods
   - [ ] Add connection testing functionality
   - [ ] Add server health check methods
-  - [ ] Implement fallback handling
+  - [ ] Implement graceful fallback handling
+  - [ ] Provide `getAdapter<T>(toolType)` method for adapters
+  - [ ] Add unit tests with mocked server connections
 
 ### 2.2 MCP Tool Adapters
+
+**Priority: Phase 2.1 - Critical Adapters (Web Search + Intent/Rerank)**
+
 - [ ] 2.2.1 Create `src/mcp/adapters/webSearchAdapter.ts`:
   - [ ] Implement adapter for Brave/Tavily/SerpAPI MCP
   - [ ] Match Brevilabs `/websearch` response format
-  - [ ] Add error handling and fallbacks
-- [ ] 2.2.2 Create `src/mcp/adapters/youtubeAdapter.ts`:
-  - [ ] Implement adapter for yt-transcript MCP
-  - [ ] Match Brevilabs `/youtube4llm` response format
-  - [ ] Handle transcript extraction errors
-- [ ] 2.2.3 Create `src/mcp/adapters/pdfAdapter.ts`:
-  - [ ] Implement adapter for PDF parser MCP
-  - [ ] Match Brevilabs `/pdf4llm` response format
-  - [ ] Handle binary content conversion
-- [ ] 2.2.4 Create `src/mcp/adapters/urlAdapter.ts`:
-  - [ ] Implement adapter for Playwright/Puppeteer MCP
-  - [ ] Match Brevilabs `/url4llm` response format
-  - [ ] Clean HTML to readable text
-- [ ] 2.2.5 Create `src/mcp/adapters/docsAdapter.ts`:
-  - [ ] Implement adapter for document processing MCP
-  - [ ] Match Brevilabs `/docs4llm` response format
-  - [ ] Handle multiple document formats (DOCX, EPUB, etc.)
-- [ ] 2.2.6 Create `src/mcp/adapters/intentAdapter.ts`:
+  - [ ] Add graceful error with detailed message: "Web search requires an MCP server. Configure in Settings → Copilot → MCP Servers → Web Search"
+  - [ ] Handle MCP server unavailable gracefully
+  - [ ] Add unit tests with mocked MCP responses
+- [ ] 2.2.2 Create `src/mcp/adapters/intentAdapter.ts`:
   - [ ] Implement local intent analysis or MCP adapter
   - [ ] Match Brevilabs `/broca` response format
   - [ ] Determine which tools to call from user message
-- [ ] 2.2.7 Create `src/mcp/adapters/rerankAdapter.ts`:
+  - [ ] Add graceful error with detailed message when MCP unavailable
+  - [ ] Add unit tests with mocked responses
+- [ ] 2.2.3 Create `src/mcp/adapters/rerankAdapter.ts`:
   - [ ] Implement reranking adapter (Cohere or local)
   - [ ] Match Brevilabs `/rerank` response format
   - [ ] Optimize search result ordering
+  - [ ] Add graceful error with detailed message when MCP unavailable
+  - [ ] Add unit tests with mocked responses
+
+**Priority: Phase 2.2 - Content Extraction Tools**
+
+- [ ] 2.2.4 Create `src/mcp/adapters/youtubeAdapter.ts`:
+  - [ ] Implement adapter for yt-transcript MCP
+  - [ ] Match Brevilabs `/youtube4llm` response format
+  - [ ] Add graceful error: "YouTube transcripts require an MCP server. Configure in Settings → Copilot → MCP Servers → YouTube"
+  - [ ] Handle transcript extraction errors gracefully
+  - [ ] Add unit tests with mocked responses
+- [ ] 2.2.5 Create `src/mcp/adapters/urlAdapter.ts`:
+  - [ ] Implement adapter for Playwright/Puppeteer MCP
+  - [ ] Match Brevilabs `/url4llm` response format
+  - [ ] Add graceful error with detailed settings path
+  - [ ] Clean HTML to readable text
+  - [ ] Add unit tests with mocked responses
+- [ ] 2.2.6 Create `src/mcp/adapters/pdfAdapter.ts`:
+  - [ ] Implement adapter for PDF parser MCP
+  - [ ] Match Brevilabs `/pdf4llm` response format
+  - [ ] Add graceful error with detailed settings path
+  - [ ] Handle binary content conversion
+  - [ ] Add unit tests with mocked responses
+
+**Priority: Phase 2.3 - Advanced/Optional**
+
+- [ ] 2.2.7 Create `src/mcp/adapters/docsAdapter.ts`:
+  - [ ] Implement adapter for document processing MCP
+  - [ ] Match Brevilabs `/docs4llm` response format
+  - [ ] Handle multiple document formats (DOCX, EPUB, etc.)
+  - [ ] Add graceful error with detailed settings path
+  - [ ] Add unit tests with mocked responses
 
 ### 2.3 Chain Runner Integration
 - [ ] 2.3.1 Modify `src/LLMProviders/chainRunner/CopilotPlusChainRunner.ts`:
@@ -101,13 +129,24 @@
   - [ ] Add validation for server configurations
 
 ### 2.5 Testing Phase 2
-- [ ] 2.5.1 Test web search via MCP adapter
-- [ ] 2.5.2 Test YouTube transcript extraction via MCP
-- [ ] 2.5.3 Test PDF processing via MCP
-- [ ] 2.5.4 Test URL extraction via MCP
-- [ ] 2.5.5 Test intent analysis with MCP adapter
-- [ ] 2.5.6 Verify fallback behavior when MCP servers unavailable
-- [ ] 2.5.7 Run integration tests with configured MCP servers
+
+**Unit Tests (with mocked MCP responses)**
+- [ ] 2.5.1 Test web search adapter with mocked responses
+- [ ] 2.5.2 Test intent adapter with mocked responses
+- [ ] 2.5.3 Test rerank adapter with mocked responses
+- [ ] 2.5.4 Test YouTube adapter with mocked responses
+- [ ] 2.5.5 Test URL adapter with mocked responses
+- [ ] 2.5.6 Test PDF adapter with mocked responses
+- [ ] 2.5.7 Verify graceful error messages when MCP not configured
+- [ ] 2.5.8 Verify detailed error messages include settings paths
+- [ ] 2.5.9 Run all unit tests: `npm run test`
+
+**Integration Tests (optional, requires real MCP servers)**
+- [ ] 2.5.10 Configure test MCP servers in test environment
+- [ ] 2.5.11 Test real web search via configured MCP server (skipped by default)
+- [ ] 2.5.12 Test real YouTube extraction (skipped by default)
+- [ ] 2.5.13 Test real PDF processing (skipped by default)
+- [ ] 2.5.14 Document how to run integration tests in README
 
 ## 3. Phase 3: MCP Configuration UI
 
@@ -227,11 +266,18 @@
 
 ## Progress Tracking
 
-**Phase 1**: 0/14 tasks completed
-**Phase 2**: 0/32 tasks completed
+**Phase 1**: 0/16 tasks completed (added settings migration tasks)
+**Phase 2**: 0/40 tasks completed (added mock testing, split adapters by priority)
 **Phase 3**: 0/12 tasks completed
 **Documentation**: 0/8 tasks completed
 **Quality Assurance**: 0/15 tasks completed
 **Deployment**: 0/12 tasks completed
 
-**Total**: 0/93 tasks completed (0%)
+**Total**: 0/103 tasks completed (0%)
+
+## Notes
+
+- **Priority Order**: Phase 2.1 adapters (Web Search, Intent, Rerank) should be completed before Phase 2.2 (YouTube, URL, PDF)
+- **Testing Strategy**: Unit tests use mocked MCP responses; integration tests are optional and skipped by default
+- **Settings Migration**: Auto-enables Plus features for existing users with console logging for transparency
+- **Error Messages**: All adapters must provide detailed error messages with settings navigation paths

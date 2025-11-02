@@ -271,6 +271,17 @@ export function sanitizeSettings(settings: CopilotSettings): CopilotSettings {
     settingsToSanitize.userId = uuidv4();
   }
 
+  // Community fork: Auto-enable Plus features for existing users (license restrictions removed)
+  if (settingsToSanitize.isPlusUser === false || settingsToSanitize.isPlusUser === undefined) {
+    settingsToSanitize.isPlusUser = true;
+    logInfo("[Copilot Fork] Auto-enabled Plus features (license restrictions removed)");
+  }
+
+  // Community fork: Log deprecation notice for license key
+  if (settingsToSanitize.plusLicenseKey) {
+    logInfo("[Copilot Fork] License key is no longer used and will be ignored");
+  }
+
   // fix: Maintain consistency between EmbeddingModelProviders.AZURE_OPENAI and ChatModelProviders.AZURE_OPENAI,
   // where it was 'azure_openai' before EmbeddingModelProviders.AZURE_OPENAI.
   if (!settingsToSanitize.activeEmbeddingModels) {

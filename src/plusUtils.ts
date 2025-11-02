@@ -1,6 +1,5 @@
 import { setChainType, setModelKey } from "@/aiParams";
 import { ChainType } from "@/chainFactory";
-import { CopilotPlusExpiredModal } from "@/components/modals/CopilotPlusExpiredModal";
 import {
   ChatModelProviders,
   ChatModels,
@@ -9,7 +8,6 @@ import {
   EmbeddingModels,
   PlusUtmMedium,
 } from "@/constants";
-import { BrevilabsClient } from "@/LLMProviders/brevilabsClient";
 import { logError, logInfo } from "@/logger";
 import { getSettings, setSettings, updateSetting, useSettingsValue } from "@/settings/model";
 import { Notice } from "obsidian";
@@ -38,23 +36,14 @@ export function useIsPlusUser(): boolean | undefined {
 
 /** Check if the user is a Plus user. */
 export async function checkIsPlusUser(context?: Record<string, any>): Promise<boolean | undefined> {
-  if (!getSettings().plusLicenseKey) {
-    turnOffPlus();
-    return false;
-  }
-  const brevilabsClient = BrevilabsClient.getInstance();
-  const result = await brevilabsClient.validateLicenseKey(context);
-  return result.isValid;
+  // Community fork: License checks removed - Plus features always enabled
+  return true;
 }
 
 /** Check if the user is on the believer plan. */
 export async function isBelieverPlan(): Promise<boolean> {
-  if (!getSettings().plusLicenseKey) {
-    return false;
-  }
-  const brevilabsClient = BrevilabsClient.getInstance();
-  const result = await brevilabsClient.validateLicenseKey();
-  return result.plan?.toLowerCase() === "believer";
+  // Community fork: License checks removed - Plus features always enabled
+  return true;
 }
 
 /**
@@ -113,14 +102,10 @@ export function turnOnPlus(): void {
 
 /**
  * Turn off Plus user status.
- * IMPORTANT: This is called on every plugin start for users without a Plus license key (see checkIsPlusUser).
- * DO NOT reset model settings here - it will cause free users to lose their model selections on every app restart.
- * Only update the isPlusUser flag.
+ * Community fork: No-op - Plus features cannot be disabled in this fork.
+ * Kept for backward compatibility with existing code paths.
  */
 export function turnOffPlus(): void {
-  const previousIsPlusUser = getSettings().isPlusUser;
-  updateSetting("isPlusUser", false);
-  if (previousIsPlusUser) {
-    new CopilotPlusExpiredModal(app).open();
-  }
+  // Community fork: No-op - Plus features always enabled
+  // License checks removed, users always have Plus access
 }

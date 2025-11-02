@@ -36,6 +36,35 @@ Obsidian Copilot is an AI-powered assistant plugin for Obsidian that provides ch
 
 ## Decisions
 
+### Decision 0: Phased Implementation Strategy
+
+**What**: Implement changes in three sequential phases rather than all at once.
+
+**Phases**:
+1. **Phase 1**: Remove license restrictions and enable Plus features
+2. **Phase 2**: Implement MCP integration architecture and adapters
+3. **Phase 3**: Build MCP configuration UI and documentation
+
+**Why**:
+- Lower risk - each phase can be tested independently
+- Faster initial value - Phase 1 immediately unlocks Plus features
+- Easier debugging - isolate issues to specific phase
+- Clear progress tracking - each phase has distinct deliverables
+
+**Alternatives Considered**:
+1. **Combined implementation**: All changes at once
+   - Rejected: Higher complexity, harder to isolate bugs
+   - Rejected: Longer time to first value
+2. **Hybrid (Phase 1+2 together)**: Remove licenses and add MCP backend simultaneously
+   - Rejected: Still complex, loses benefit of early Plus access
+
+**Trade-offs**:
+- ✅ Lower risk per phase
+- ✅ Faster time to initial value (Phase 1)
+- ✅ Easier testing and validation
+- ❌ Longer total timeline
+- ❌ Temporary state where Plus features are enabled but non-functional (between Phase 1 and 2)
+
 ### Decision 1: MCP as Tool Integration Standard
 
 **What**: Use Model Context Protocol (MCP) servers instead of Brevilabs API for all tool integrations.
@@ -100,11 +129,11 @@ export async function checkIsPlusUser(): Promise<boolean | undefined> {
 
 ### Decision 3: Adapter Pattern for MCP Integration
 
-**What**: Create adapter layer between chain runners and MCP servers.
+**What**: Create adapter layer between chain runners and MCP servers with singleton MCPManager.
 
 **Architecture**:
 ```
-ChainRunner → ToolAdapter → MCPManager → MCP Server
+ChainRunner → ToolAdapter → MCPManager (singleton) → MCP Server
 ```
 
 **Why**:
@@ -112,9 +141,31 @@ ChainRunner → ToolAdapter → MCPManager → MCP Server
 - Easy to swap MCP implementations
 - Maintains same interface for chain runners
 - Testable in isolation
+- Singleton provides centralized connection management and state
+
+**MCPManager as Singleton**:
+- Matches existing plugin patterns (e.g., LLMProviderManager)
+- Plugin-scoped lifecycle (initialized on load, cleaned up on unload)
+- Single source of truth for MCP server configurations
+- Centralized connection pooling and health monitoring
+- Easier to test with mock instances
 
 **Interface Example**:
 ```typescript
+// Singleton MCP Manager
+class MCPManager {
+  private static instance: MCPManager;
+  private servers: Map<string, MCPServerConnection>;
+
+  static getInstance(): MCPManager;
+  registerServer(config: MCPServerConfig): Promise<void>;
+  removeServer(serverId: string): Promise<void>;
+  testConnection(serverId: string): Promise<boolean>;
+  getAdapter<T>(toolType: MCPToolType): MCPAdapter<T> | null;
+  healthCheck(): Promise<Map<string, boolean>>;
+}
+
+// Tool Adapter Interface
 interface ToolAdapter {
   execute(args: any): Promise<ToolResult>;
   isAvailable(): Promise<boolean>;
@@ -128,45 +179,254 @@ interface ToolAdapter {
    - Rejected: Harder to test
    - Rejected: Duplicated code across runners
 
-2. **Single monolithic MCP client**:
+2. **Per-chat MCP instances**:
+   - Rejected: Unnecessary complexity, servers are shared resources
+   - Rejected: Connection overhead for each chat
+
+3. **Single monolithic MCP client**:
    - Rejected: Violates single responsibility principle
    - Rejected: Harder to extend with new tools
 
 **Trade-offs**:
 - ✅ Clean separation of concerns
 - ✅ Easy to test and maintain
+- ✅ Centralized state management
 - ❌ Additional abstraction layer
 
 ### Decision 4: Graceful Degradation When MCP Unavailable
 
-**What**: Features fail gracefully with clear error messages when MCP servers not configured or unavailable.
+**What**: Features fail gracefully with detailed error messages that include settings paths when MCP servers not configured or unavailable.
 
 **Behavior**:
 - Check `MCPManager.isToolAvailable(toolName)` before calling
-- Show clear error: "Web search requires MCP server configuration. See Settings → MCP Servers"
-- Don't crash or hang - return error state
-- Link to setup documentation
+- Show **detailed** error with settings path: "Web search requires an MCP server. Configure in Settings → Copilot → MCP Servers → Web Search"
+- Display errors inline in chat (not modals)
+- Include link/button to open settings at correct panel
+- Allow conversation to continue despite tool failure
+- Use warning styling (not blocking error styling)
+
+**Error Message Format**:
+```typescript
+// When MCP server not configured
+"Web search requires an MCP server. Configure in Settings → Copilot → MCP Servers → Web Search"
+
+// When MCP server is down/unavailable
+"Web search MCP server is unavailable. Check server status in Settings → Copilot → MCP Servers"
+
+// General template
+"[Feature] requires [requirement]. Configure in Settings → Copilot → MCP Servers → [Tool Type]"
+```
 
 **Why**:
-- Better user experience than silent failures
-- Guides users to solution
-- Prevents plugin crashes
+- Better user experience than silent failures or vague errors
+- Provides actionable guidance with exact navigation path
+- Reduces support burden (users can self-service)
+- Matches Obsidian user expectations for helpful error messages
+- Conversation can continue even if one tool fails
 
 **Alternatives Considered**:
-1. **Fail hard with exceptions**:
+1. **Simple errors**: "Feature requires MCP server configuration"
+   - Rejected: Too vague, users don't know what to do next
+   - Rejected: Doesn't guide to solution
+
+2. **Interactive setup**: Show inline setup button that opens modal
+   - Rejected: Too complex for Phase 1
+   - Note: Could add as enhancement in future
+
+3. **Fail hard with exceptions**:
    - Rejected: Poor user experience
    - Rejected: Could crash plugin
 
-2. **Hide tools if MCP unavailable**:
+4. **Hide tools if MCP unavailable**:
    - Rejected: Confusing (tools disappear/reappear)
    - Rejected: Harder to discover what's available
+   - Rejected: Prevents feature discovery
 
 **Trade-offs**:
-- ✅ Clear error messaging
-- ✅ Guides users to setup
+- ✅ Clear, actionable error messaging
+- ✅ Guides users to exact solution
+- ✅ Conversation continues despite tool failure
 - ❌ Features non-functional until configured
 
-### Decision 5: Per-Tool MCP Server Mapping
+### Decision 5: Settings Migration - Auto-Migrate with Logging
+
+**What**: Automatically set `isPlusUser: true` on first load for existing users, log migration, no modal interruption.
+
+**Migration Logic**:
+```typescript
+// In settings migration (src/settings/model.ts or migration file)
+function migrateSettings(existingSettings: CopilotSettings): CopilotSettings {
+  if (existingSettings.isPlusUser === false || existingSettings.isPlusUser === undefined) {
+    existingSettings.isPlusUser = true;
+    console.log('[Copilot Fork] Auto-enabled Plus features (license restrictions removed)');
+  }
+
+  // License key field deprecated but not removed for backward compatibility
+  if (existingSettings.licenseKey) {
+    console.log('[Copilot Fork] License key is no longer used and will be ignored');
+  }
+
+  return existingSettings;
+}
+```
+
+**Why**:
+- Minimal friction for users upgrading to fork
+- Settings migration is standard plugin pattern in Obsidian
+- Console logging provides transparency for debugging
+- Avoids modal fatigue (users don't need to click through upgrade flow)
+- Immediate access to Plus features
+
+**Alternatives Considered**:
+1. **One-time modal explaining changes**:
+   - Rejected: Adds friction and interrupts workflow
+   - Rejected: Users may dismiss without reading
+   - Rejected: Modal fatigue is real problem
+
+2. **Silent upgrade with no logging**:
+   - Rejected: Less transparent for debugging
+   - Rejected: Users don't know what changed
+   - Rejected: Harder to troubleshoot issues
+
+3. **Require manual toggle in settings**:
+   - Rejected: Defeats purpose of removing restrictions
+   - Rejected: Users might not know to enable it
+   - Rejected: Extra step adds friction
+
+**Trade-offs**:
+- ✅ Zero friction upgrade experience
+- ✅ Immediate Plus access
+- ✅ Transparent via console logs
+- ❌ Users may not notice change without reading docs
+- ❌ No explicit acknowledgment of fork differences
+
+### Decision 6: Testing Strategy - Mock MCP Responses
+
+**What**: Mock MCP server responses in unit tests, document real server setup for optional integration tests.
+
+**Test Structure**:
+```typescript
+// Unit test with mocked MCP responses (fast, no external dependencies)
+describe('WebSearchAdapter', () => {
+  let mockMCPManager: jest.Mocked<MCPManager>;
+
+  beforeEach(() => {
+    mockMCPManager = {
+      getAdapter: jest.fn().mockReturnValue({
+        search: jest.fn().mockResolvedValue({
+          results: [
+            { title: 'Test Result', url: 'https://example.com', snippet: '...' }
+          ]
+        })
+      })
+    } as any;
+  });
+
+  it('should return search results from MCP', async () => {
+    const adapter = new WebSearchAdapter(mockMCPManager);
+    const results = await adapter.search('test query');
+    expect(results.results).toHaveLength(1);
+    expect(results.results[0].title).toBe('Test Result');
+  });
+
+  it('should throw helpful error when MCP not configured', async () => {
+    mockMCPManager.getAdapter.mockReturnValue(null);
+    const adapter = new WebSearchAdapter(mockMCPManager);
+    await expect(adapter.search('test')).rejects.toThrow(
+      /Configure in Settings.*MCP Servers.*Web Search/
+    );
+  });
+});
+
+// Integration test with real MCP server (skipped by default, run manually)
+describe('WebSearchAdapter Integration', () => {
+  it.skip('should fetch real search results from configured MCP server', async () => {
+    // Requires: MCP server configured in test environment
+    // Run with: npm test -- --testNamePattern="Integration"
+    const manager = MCPManager.getInstance();
+    const adapter = manager.getAdapter('web-search');
+    const results = await adapter.search('TypeScript latest features');
+    expect(results.results.length).toBeGreaterThan(0);
+  });
+});
+```
+
+**Why**:
+- Unit tests should not depend on external services (fast, reliable)
+- Integration tests validate real MCP integration (optional, requires setup)
+- Mocks ensure consistent test results and fast CI/CD
+- Real server testing validates actual user experience when run manually
+- Separation allows running unit tests without MCP server setup
+
+**Alternatives Considered**:
+1. **Require test MCP servers for all tests**:
+   - Rejected: Makes CI/CD complex and slow
+   - Rejected: External dependency makes tests flaky
+   - Rejected: Setup barrier for contributors
+
+2. **Skip all MCP testing**:
+   - Rejected: Leaves integration completely untested
+   - Rejected: Risky - no validation of adapter logic
+
+3. **Stub Brevilabs API for testing**:
+   - Rejected: Maintains dependency we're removing
+   - Rejected: Doesn't test actual MCP integration
+
+**Trade-offs**:
+- ✅ Fast, reliable unit tests
+- ✅ Optional integration testing for validation
+- ✅ No external dependencies for CI/CD
+- ✅ Easy for contributors to run tests
+- ❌ Integration tests require manual setup and execution
+
+### Decision 7: Adapter Priority - Web Search and Intent/Rerank First
+
+**What**: Implement web search and intent analysis adapters first in Phase 2, then other tools.
+
+**Implementation Order**:
+1. **Phase 2.1** (Critical - Agent Mode foundation):
+   - `webSearchAdapter.ts` - Most commonly used Plus feature
+   - `intentAdapter.ts` - Required for Agent Mode tool routing
+   - `rerankAdapter.ts` - Enhances search result quality
+
+2. **Phase 2.2** (Content extraction tools):
+   - `youtubeAdapter.ts` - YouTube transcript extraction
+   - `urlAdapter.ts` - Web page content extraction
+   - `pdfAdapter.ts` - PDF document processing
+
+3. **Phase 2.3** (Optional/Advanced):
+   - `docsAdapter.ts` - Advanced document formats (DOCX, EPUB)
+
+**Why** (based on brainstorming with user):
+- **Web Search**: Most commonly used Plus feature, essential for research workflows
+- **Intent Analysis**: Required for Agent Mode to determine which tools to call
+- **Rerank**: Optimizes search results, improves quality of agent responses
+- **Sequential rollout**: Proves architecture with critical features before implementing rest
+- **Early validation**: Can test MCP integration with high-value features first
+
+**Alternatives Considered**:
+1. **All adapters simultaneously**:
+   - Rejected: Higher complexity, harder to validate each adapter
+   - Rejected: Longer time to first working feature
+   - Rejected: More difficult to debug issues
+
+2. **Content tools first (YouTube/PDF/URL before search)**:
+   - Rejected: Less impactful without search working
+   - Rejected: Intent analysis needed for Agent Mode to work at all
+
+3. **Random order based on implementation ease**:
+   - Rejected: Doesn't prioritize user value
+   - Rejected: May leave critical features until last
+
+**Trade-offs**:
+- ✅ Fastest path to working Agent Mode
+- ✅ High user value features delivered first
+- ✅ Easier to validate architecture incrementally
+- ✅ Can release Phase 2.1 before 2.2/2.3 if needed
+- ❌ Some features remain stubbed longer
+- ❌ Content extraction tools wait for Phase 2.2
+
+### Decision 8: Per-Tool MCP Server Mapping
 
 **What**: Users can configure which MCP server handles each tool type.
 
